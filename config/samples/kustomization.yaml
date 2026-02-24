@@ -1,0 +1,5 @@
+# CI and CD are created by the operator from the Service; their samples
+# show the fields for reference only. The CIPlugin samples need Secrets (see
+# their comments) and are applied one by one.
+resources:
+  - koptan_v1_service.yaml

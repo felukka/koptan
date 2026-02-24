@@ -1,0 +1,25 @@
+---
+name: Lint
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+permissions:
+  contents: read
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Nix
+        uses: DeterminateSystems/determinate-nix-action@v3.24.2
+      - name: Run linter
+        run: nix develop --command golangci-lint run
