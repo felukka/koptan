@@ -1,0 +1,15 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: koptan
+  description: Koptan, your autonomous autopilot for your cluster.
+  annotations:
+    github.com/project-slug: felukka/koptan
+    backstage.io/techdocs-ref: dir:../docs
+    koptan.dev/component-kind: portal
+spec:
+  type: website
+  lifecycle: experimental
+  owner: platform-team
+  system: koptan

@@ -1,0 +1,12 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-team
+  title: Platform Team
+  description: Team responsible for the Koptan platform and its operator.
+spec:
+  type: team
+  profile:
+    displayName: Platform Team
+  children: []

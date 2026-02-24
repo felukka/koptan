@@ -1,0 +1,38 @@
+# A git repository paired with an agent session: prompts sent from the
+# Self Service page become commits, which Koptan builds and deploys like any
+# Service. The operator needs KOPTAN_AGENT_KEY (see config/manager).
+#
+#   kubectl create secret generic shop-git --from-literal=token=ghp_...
+#   kubectl create secret generic shop-ai --from-literal=apiKey=sk-ant-...
+apiVersion: koptan.felukka.org/v1
+kind: SelfService
+metadata:
+  name: shop
+  namespace: default
+spec:
+  repo:
+    # The operator creates the repository (GitHub or GitLab)...
+    create:
+      provider: github
+      owner: example-org
+      private: true
+      tokenSecretRef: {name: shop-git, key: token}
+    # ...or the agent works on one that exists (it may be empty):
+    # existing:
+    #   url: https://github.com/example-org/shop.git
+    #   secretRef: {name: shop-git, key: token}
+  branch: main
+  ai:
+    provider: anthropic
+    model: claude-opus-5-5
+    apiKeySecretRef: {name: shop-ai, key: apiKey}
+    # Or any OpenAI-compatible server, e.g. a local Ollama (no key needed):
+    # provider: openai-compatible
+    # baseURL: http://ollama.ollama.svc:11434/v1
+    # model: qwen2.5-coder:14b
+  # Lets the agent run tests and formatters inside its pod.
+  allowCommands: false
+  # The Service created for the repository.
+  service:
+    port: 8080
+    replicas: 1

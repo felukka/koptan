@@ -1,0 +1,165 @@
+---
+app:
+  title: Koptan
+  baseUrl: http://localhost:3000
+
+  # Enable all packages by default, this will discover packages from packages/app/package.json
+  packages: all
+  extensions:
+    # Minzar is the only theme (packages/app/src/modules/theme).
+    - theme:app/light: false
+    - theme:app/dark: false
+    # Bay (plugins/koptan-bay) is the landing page. The catalog stays installed
+    # because Settings, Home and Search need its service and entity route; only the
+    # catalog index page is switched off.
+    - page:catalog: false
+
+    # Visit tracking records which pages users navigate to and is disabled by default.
+    # Enable it to populate the Most Visited and Recently Visited widgets on the Home page.
+    # Visit data is stored via UserSettings storage if available, otherwise browser localStorage.
+    # - api:home/visits: true
+    # - app-root-element:home/visit-listener: true
+    - home-page-widget:home/toolkit:
+        config:
+          tools:
+            - url: https://koptan.felukka.org
+              label: Docs
+              icon: docs
+            - url: https://github.com/felukka/koptan
+              label: GitHub
+              icon: github
+            - url: https://github.com/felukka/koptan
+              label: Contributing
+              icon: docs
+            - url: https://github.com/felukka/koptan/issues/new/choose
+              label: Submit New Issue
+              icon: github
+    - home-page-widget:home/world-clock:
+        config:
+          clockConfigs:
+            - label: UTC
+              timeZone: UTC
+    - page:home:
+        config:
+          path: /home
+          defaultConfig:
+            - component: HomePageSearchBar
+              column: 0
+              row: 0
+              width: 12
+              height: 2
+              deletable: false
+            - component: GettingStarted
+              column: 0
+              row: 1
+              width: 4
+              height: 11
+            - component: HomePageStarredEntities
+              column: 4
+              row: 2
+              width: 4
+              height: 4
+            - component: HomePageRandomJoke
+              column: 8
+              row: 2
+              width: 4
+              height: 4
+            - component: HomePageToolkit
+              column: 4
+              row: 6
+              width: 4
+              height: 3
+            - component: HomePageWorldClock
+              column: 8
+              row: 6
+              width: 4
+              height: 3
+            - component: HomePageMostVisited
+              column: 4
+              row: 9
+              width: 4
+              height: 4
+            - component: HomePageRecentlyVisited
+              column: 8
+              row: 9
+              width: 4
+              height: 4
+organization:
+  name: Felukka
+backend:
+  # Used for enabling authentication, secret is shared by all backend plugins
+  # See https://backstage.io/docs/auth/service-to-service-auth for
+  # information on the format
+  # auth:
+  #   keys:
+  #     - secret: ${BACKEND_SECRET}
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+    # Uncomment the following host directive to bind to specific interfaces
+    # host: 127.0.0.1
+  csp:
+    connect-src:
+      - "'self'"
+      - 'http:'
+      - 'https:'
+    # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
+    # Default Helmet Content-Security-Policy values can be removed by setting the key to false
+  cors:
+    origin: http://localhost:3000
+    methods:
+      - GET
+      - HEAD
+      - PATCH
+      - POST
+      - PUT
+      - DELETE
+    credentials: true
+  # This is for local development only, it is not recommended to use this in production
+  # The production database configuration is stored in app-config.production.yaml
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+auth:
+  # see https://backstage.io/docs/auth/ to learn about auth providers
+  providers:
+    # See https://backstage.io/docs/auth/guest/provider
+    guest: {}
+    # To require a real sign-in, add the GitHub provider here and in the
+    # backend (@backstage/plugin-auth-backend-module-github-provider), set
+    # a sign-in resolver, and add a SignInPage extension to packages/app.
+    # See https://backstage.io/docs/auth/github/provider
+catalog:
+  # No entities: the catalog is installed only for the services other plugins need.
+  locations: []
+kubernetes:
+  # see https://backstage.io/docs/features/kubernetes/configuration for kubernetes configuration options
+  serviceLocatorMethod:
+    type: multiTenant
+  clusterLocatorMethods:
+    # Development only: talks to the cluster through `kubectl proxy`.
+    # Replace with a `config` cluster list (and a service account bound to
+    # config/rbac/backstage_role.yaml) for real deployments.
+    - type: localKubectlProxy
+  customResources:
+    - group: koptan.felukka.org
+      apiVersion: v1
+      plural: services
+    - group: koptan.felukka.org
+      apiVersion: v1
+      plural: cis
+    - group: koptan.felukka.org
+      apiVersion: v1
+      plural: cds
+# Koptan plugin (web/plugins/koptan-backend). Uses your kubeconfig, or the pod's
+# service account in-cluster. Both settings are optional.
+koptan:
+  # namespace: default      # limit to one namespace; omit for all namespaces
+  # kubeContext: kind-koptan
+  # Must equal the operator's KOPTAN_AGENT_KEY (Secret koptan-agent-key) for
+  # the Self Service page to reach the agents.
+  agentKey: ${KOPTAN_AGENT_KEY}
+# see https://backstage.io/docs/permissions/getting-started for more on the permission framework
+permission:
+  # setting this to `false` will disable permissions
+  enabled: true

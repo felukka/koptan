@@ -1,0 +1,32 @@
+# Functional Source License, Version 1.1, Apache 2.0 Future License
+
+Copyright c 2026 Felukka Group
+
+---
+
+## 1. The Software
+The "Software" is each version of the software that we make available under these Terms and Conditions.
+
+## 2. License Grant
+Subject to your compliance with these terms, we hereby grant you the right to use, copy, modify, create derivative works, publicly perform, publicly display and redistribute the Software for any Permitted Purpose.
+
+## 3. Permitted Purpose
+A Permitted Purpose is any purpose other than a Competing Use.
+
+A **Competing Use** means making the Software available to others in a commercial product or service that:
+1. Substitutes for the Software;
+2. Substitutes for any other product or service we offer using the Software; or
+3. Offers the same or substantially similar functionality as the Software.
+
+**Permitted Purposes** specifically include:
+* Your internal use and access;
+* Non-commercial education and research;
+* Professional services provided to a licensee using the Software.
+
+## 4. Change License
+On the second anniversary of the date we make a specific version of the Software available, the license for that version automatically terminates and converts to the Apache License, Version 2.0.
+
+---
+
+## 5. Disclaimers
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
