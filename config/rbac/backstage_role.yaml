@@ -1,0 +1,39 @@
+# Permissions for the Backstage backend plugin (web/plugins/koptan-backend).
+# Bind this ClusterRole to the service account Backstage uses to reach the cluster.
+# It lists every Koptan resource and can create a Service from the UI, store the
+# git token and registry credentials as Secrets (owned by the Service, deleted
+# again if the Service cannot be created), and read node status for the Bay.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: backstage-role
+rules:
+  - apiGroups:
+      - koptan.felukka.org
+    resources:
+      - services
+      - cis
+      - cds
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - patch
+      - delete

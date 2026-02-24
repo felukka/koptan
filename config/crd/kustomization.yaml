@@ -1,0 +1,4 @@
+resources:
+  - bases/koptan.felukka.org_services.yaml
+  - bases/koptan.felukka.org_cis.yaml
+  - bases/koptan.felukka.org_cds.yaml

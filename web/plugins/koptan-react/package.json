@@ -1,0 +1,37 @@
+{
+  "name": "@internal/plugin-koptan-react",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "backstage": {
+    "role": "web-library",
+    "pluginId": "koptan"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "backstage-cli package build",
+    "lint": "backstage-cli package lint",
+    "test": "backstage-cli package test",
+    "clean": "backstage-cli package clean"
+  },
+  "dependencies": {
+    "@backstage/frontend-plugin-api": "^0.18.1",
+    "@backstage/ui": "^0.18.0",
+    "@internal/plugin-koptan-common": "workspace:^",
+    "react-router-dom": "^6.30.2"
+  },
+  "peerDependencies": {
+    "react": "^16.13.1 || ^17.0.0 || ^18.0.0"
+  },
+  "devDependencies": {
+    "@backstage/cli": "^0.36.6",
+    "react": "^16.13.1 || ^17.0.0 || ^18.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

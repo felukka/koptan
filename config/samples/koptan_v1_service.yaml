@@ -1,0 +1,18 @@
+apiVersion: koptan.felukka.org/v1
+kind: Service
+metadata:
+  name: example-service
+  namespace: default
+spec:
+  source:
+    repo: "https://github.com/example/repo.git"
+    # Branch, tag or commit SHA; omit for the default branch.
+    revision: "main"
+  # Optional. Defaults: the operator's --default-registry and the Service name.
+  image:
+    registry: "ghcr.io"
+    repo: "example/repo"
+    # A kubernetes.io/dockerconfigjson Secret, used to push and to pull.
+    credentialsSecret: "example-registry"
+  replicas: 2
+  port: 8080

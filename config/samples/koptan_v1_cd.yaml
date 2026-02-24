@@ -1,0 +1,9 @@
+apiVersion: koptan.felukka.org/v1
+kind: CD
+metadata:
+  name: example-cd
+  namespace: default
+spec:
+  ci:
+    name: example-ci
+  replicas: 1
