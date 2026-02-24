@@ -1,0 +1,67 @@
+# Permissions for the Backstage backend plugin (web/plugins/koptan-backend).
+# Bind this ClusterRole to the service account Backstage uses to reach the cluster.
+# It lists every Koptan resource and can create a Service from the UI, store the
+# git token and registry credentials as Secrets (owned by the Service, deleted
+# again if the Service cannot be created), and read node status for the Bay.
+# CIPlugins are listed for the Scan Bay; Alerts are listed and created (their
+# channel URLs go to an owned Secret) for the Signal Mast. SelfServices are
+# listed and created; prompts reach each agent through the services/proxy
+# subresource, and a pushed commit annotates (patches) the koptan Service so
+# the operator builds it at once.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: backstage-role
+rules:
+  - apiGroups:
+      - koptan.felukka.org
+    resources:
+      - services
+      - cis
+      - cds
+      - alerts
+      - selfservices
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+  - apiGroups:
+      - koptan.felukka.org
+    resources:
+      - services
+    verbs:
+      - patch
+  - apiGroups:
+      - koptan.felukka.org
+    resources:
+      - ciplugins
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - services/proxy
+    verbs:
+      - get
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - patch
+      - delete

@@ -1,0 +1,1 @@
+{"name": "api", "scripts": {"start": "bun run index.ts"}}

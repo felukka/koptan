@@ -1,0 +1,20 @@
+# Any container can be a step. It starts in the build context and gets
+# KOPTAN_SERVICE, KOPTAN_REVISION, KOPTAN_SOURCE_DIR, KOPTAN_REPORTS_DIR and
+# the other KOPTAN_* variables.
+apiVersion: koptan.felukka.org/v1
+kind: CIPlugin
+metadata:
+  name: trivy-fs
+  namespace: default
+spec:
+  type: custom
+  order: 10
+  # Ignore: report findings without blocking the build.
+  failurePolicy: Ignore
+  custom:
+    image: aquasec/trivy:0.56.2
+    command: ["trivy"]
+    args: ["fs", "--exit-code", "1", "--severity", "CRITICAL", "--no-progress", "."]
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}

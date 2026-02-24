@@ -1,0 +1,11 @@
+apiVersion: koptan.felukka.org/v1
+kind: CI
+metadata:
+  name: example-ci
+  namespace: default
+spec:
+  service:
+    name: example-service
+  image:
+    registry: "docker.io"
+    repo: "felukka/example"
