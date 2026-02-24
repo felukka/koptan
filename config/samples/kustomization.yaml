@@ -1,4 +1,3 @@
-## Append samples of your project ##
 resources:
-- felukka_v1alpha_habel.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples
+  - felukka_v1alpha_slipway.yaml
+  - felukka_v1alpha_voyage.yaml

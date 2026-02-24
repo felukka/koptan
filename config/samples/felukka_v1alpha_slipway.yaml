@@ -1,0 +1,74 @@
+apiVersion: koptan.felukka.sh/v1alpha
+kind: Slipway
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: slipway-go
+spec:
+  appRef:
+    name: goapp-sample
+    kind: GoApp
+  image:
+    registry: ghcr.io
+    name: example/myapp
+  poll:
+    intervalSeconds: 60
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: Slipway
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: slipway-dotnet
+spec:
+  appRef:
+    name: dotnetapp-sample
+    kind: DotnetApp
+  image:
+    registry: ghcr.io
+    name: example/dotnet-api
+  poll:
+    intervalSeconds: 90
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: Slipway
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: slipway-java
+spec:
+  appRef:
+    name: javaapp-sample
+    kind: JavaApp
+  image:
+    registry: ghcr.io
+    name: example/java-api
+  poll:
+    intervalSeconds: 120
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: Slipway
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: slipway-with-extra-steps
+spec:
+  appRef:
+    name: goapp-sample
+    kind: GoApp
+  image:
+    registry: ghcr.io
+    name: example/myapp
+  poll:
+    intervalSeconds: 60
+  extraSteps:
+    - name: lint
+      image: golangci/golangci-lint:latest
+      command: ["sh", "-c", "cd /tmp/workspace && golangci-lint run"]
+    - name: scan
+      image: aquasec/trivy:latest
+      command: ["sh", "-c", "trivy fs /tmp/workspace"]

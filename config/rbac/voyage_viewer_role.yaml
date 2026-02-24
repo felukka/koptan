@@ -1,7 +1,7 @@
 # This rule is not used by the project koptan itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read-only access to felukka.felukka.sh resources.
+# Grants read-only access to koptan.felukka.sh resources.
 # This role is intended for users who need visibility into these resources
 # without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
 
@@ -11,19 +11,19 @@ metadata:
   labels:
     app.kubernetes.io/name: koptan
     app.kubernetes.io/managed-by: kustomize
-  name: habel-viewer-role
+  name: voyage-viewer-role
 rules:
-- apiGroups:
-  - felukka.felukka.sh
-  resources:
-  - habels
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - felukka.felukka.sh
-  resources:
-  - habels/status
-  verbs:
-  - get
+  - apiGroups:
+      - koptan.felukka.sh
+    resources:
+      - voyages
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - koptan.felukka.sh
+    resources:
+      - voyages/status
+    verbs:
+      - get

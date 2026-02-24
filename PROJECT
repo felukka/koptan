@@ -6,6 +6,8 @@ cliVersion: v4.10.1
 domain: felukka.sh
 layout:
 - go.kubebuilder.io/v4
+plugins:
+  autoupdate.kubebuilder.io/v1-alpha: {}
 projectName: koptan
 repo: github.com/felukka/koptan
 resources:
@@ -14,8 +16,35 @@ resources:
     namespaced: true
   controller: true
   domain: felukka.sh
-  group: felukka
-  kind: Habel
+  group: koptan
+  kind: Voyage
+  path: github.com/felukka/koptan/api/v1alpha
+  version: v1alpha
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: felukka.sh
+  group: koptan
+  kind: GoApp
+  path: github.com/felukka/koptan/api/v1alpha
+  version: v1alpha
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: felukka.sh
+  group: koptan
+  kind: DotnetApp
+  path: github.com/felukka/koptan/api/v1alpha
+  version: v1alpha
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: felukka.sh
+  group: koptan
+  kind: JavaApp
   path: github.com/felukka/koptan/api/v1alpha
   version: v1alpha
 version: "3"

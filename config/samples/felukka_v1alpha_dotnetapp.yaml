@@ -1,0 +1,37 @@
+apiVersion: koptan.felukka.sh/v1alpha
+kind: DotnetApp
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: dotnetapp-sample
+spec:
+  source:
+    repo: https://github.com/example/dotnet-api
+    revision: main
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: DotnetApp
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: dotnetapp-full-example
+spec:
+  source:
+    repo: https://github.com/example/dotnet-api
+    revision: main
+    patToken: my-git-secret
+  sdkVersion: "8.0"
+  projectPath: "src/MyApp/MyApp.csproj"
+  configuration: "Release"
+  selfContained: false
+  extraNugetSources:
+    - "https://nuget.example.com/v3/index.json"
+  buildArgs:
+    - "/p:Version=1.2.3"
+    - "/p:TreatWarningsAsErrors=true"
+  extraPackages:
+    - libgdiplus
+  env:
+    NUGET_XMLDOC_MODE: "skip"

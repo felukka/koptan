@@ -1,0 +1,32 @@
+apiVersion: koptan.felukka.sh/v1alpha
+kind: GoApp
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: goapp-sample
+spec:
+  source:
+    repo: https://github.com/example/myapp
+    revision: main
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: GoApp
+metadata:
+  name: goapp-full-example
+spec:
+  source:
+    repo: https://github.com/example/myapp
+    revision: main
+    patToken: my-git-secret
+  goVersion: "1.24"
+  entrypoint: "./cmd/server"
+  cgoEnabled: false
+  ldflags: "-s -w -X main.version=$(VERSION)"
+  buildArgs:
+    - "-tags"
+    - "netgo"
+  extraPackages:
+    - git
+  env:
+    GOFLAGS: "-mod=vendor"

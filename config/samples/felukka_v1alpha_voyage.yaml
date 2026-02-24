@@ -1,0 +1,56 @@
+apiVersion: koptan.felukka.sh/v1alpha
+kind: Voyage
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: voyage-simple
+spec:
+  slipwayRef:
+    name: slipway-go
+  port: 8080
+  replicas: 2
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: Voyage
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: voyage-with-resources
+spec:
+  slipwayRef:
+    name: slipway-go
+  port: 8080
+  replicas: 3
+  resources:
+    cpuRequest: 100m
+    cpuLimit: 500m
+    memoryRequest: 128Mi
+    memoryLimit: 512Mi
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: Voyage
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: voyage-full
+spec:
+  slipwayRef:
+    name: slipway-dotnet
+  port: 5000
+  replicas: 2
+  env:
+    - name: ASPNETCORE_ENVIRONMENT
+      value: Production
+  resources:
+    cpuRequest: 250m
+    cpuLimit: "1"
+    memoryRequest: 256Mi
+    memoryLimit: 1Gi
+  healthCheck:
+    path: /health
+    port: 5000
+    initialDelaySeconds: 15
+    periodSeconds: 10

@@ -1,0 +1,56 @@
+apiVersion: koptan.felukka.sh/v1alpha
+kind: JavaApp
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: javaapp-sample
+spec:
+  source:
+    repo: https://github.com/example/java-api
+    revision: main
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: JavaApp
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: javaapp-spring-example
+spec:
+  source:
+    repo: https://github.com/example/java-api
+    revision: main
+    patToken: my-git-secret
+  javaVersion: "21"
+  buildTool: maven
+  artifactPath: "target/api-0.0.1-SNAPSHOT.jar"
+  mavenGoal: "package"
+  mavenProfiles:
+    - prod
+  jvmArgs: "-Xmx512m -XX:+UseG1GC"
+  springBoot: true
+  buildArgs:
+    - "-Dmaven.test.skip=true"
+  extraPackages:
+    - curl
+  env:
+    MAVEN_OPTS: "-Xmx1g"
+---
+apiVersion: koptan.felukka.sh/v1alpha
+kind: JavaApp
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: javaapp-gradle-example
+spec:
+  source:
+    repo: https://github.com/example/java-gradle-app
+    revision: main
+  buildTool: gradle
+  gradleTask: "bootJar"
+  jvmArgs: "-Xmx256m"
+  springBoot: true
+  buildArgs:
+    - "--no-build-cache"
