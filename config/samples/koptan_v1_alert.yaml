@@ -1,0 +1,34 @@
+# Notifies Slack, Teams and a webhook about a Service's pipeline. The
+# webhook URLs are credentials, so they live in a Secret:
+#   kubectl create secret generic example-alert-channels \
+#     --from-literal=slack-url=https://hooks.slack.com/services/... \
+#     --from-literal=teams-url=https://prod-00.westeurope.logic.azure.com/... \
+#     --from-literal=hook-url=http://receiver.tools.svc/koptan \
+#     --from-literal=hook-signing=change-me
+apiVersion: koptan.felukka.org/v1
+kind: Alert
+metadata:
+  name: example-alert
+  namespace: default
+spec:
+  serviceRef:
+    name: example-service
+  # Or every Service with a label:
+  # selector:
+  #   matchLabels:
+  #     team: payments
+  # Empty means all of: Push, CIStarted, CISucceeded, CIFailed,
+  # CDDeploying, CDSucceeded, CDFailed.
+  events: [Push, CISucceeded, CIFailed, CDSucceeded, CDFailed]
+  channels:
+    - name: slack
+      type: slack
+      urlSecretRef: {name: example-alert-channels, key: slack-url}
+    - name: teams
+      type: teams
+      urlSecretRef: {name: example-alert-channels, key: teams-url}
+    - name: hook
+      type: webhook
+      urlSecretRef: {name: example-alert-channels, key: hook-url}
+      # Adds X-Koptan-Signature: sha256=<HMAC of the body>.
+      signingSecretRef: {name: example-alert-channels, key: hook-signing}

