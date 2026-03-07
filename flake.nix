@@ -13,27 +13,44 @@
       ];
     in
     {
-      packages = nixpkgs.lib.genAttrs systems (system: let pkgs = import nixpkgs { inherit system; }; in {
-        default = pkgs.buildGoModule {
-          pname = "koptan";
-          inherit version;
-          src = ./.;
-          subPackages = [ "cmd/..." ];
-          vendorHash = "sha256-tKf1DkA4RAfmQA+4SSPi80BCV5bdFZCWbXuBzU4Ogdk=";
-        };
-      });
-      devShells = nixpkgs.lib.genAttrs systems (system: let pkgs = import nixpkgs { inherit system; }; in {
-        default = pkgs.mkShellNoCC {
-          buildInputs = with pkgs; [
-            gcc
-            gnumake
-            go
-            go-tools
-            gopls
-            gotools
-            kubebuilder
-          ];
-        };
-      });
+      packages = nixpkgs.lib.genAttrs systems (
+        system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          default = pkgs.buildGoModule {
+            pname = "koptan";
+            inherit version;
+            src = ./.;
+            subPackages = [ "cmd/..." ];
+            vendorHash = "sha256-tKf1DkA4RAfmQA+4SSPi80BCV5bdFZCWbXuBzU4Ogdk=";
+          };
+        }
+      );
+      devShells = nixpkgs.lib.genAttrs systems (
+        system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          default = pkgs.mkShellNoCC {
+            buildInputs = with pkgs; [
+              gcc
+              gnumake
+              go
+              go-tools
+              gopls
+              gotools
+              kubebuilder
+              (python3.withPackages (
+                p: with p; [
+                  mkdocs-material
+                ]
+              ))
+            ];
+          };
+        }
+      );
     };
 }
