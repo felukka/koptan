@@ -2,7 +2,15 @@
 name: Lint
 on:
   push:
+    paths:
+      - internal/**
+      - api/**
+      - cmd/**
   pull_request:
+    paths:
+      - internal/**
+      - api/**
+      - cmd/**
 jobs:
   lint:
     name: Run on Ubuntu
@@ -11,7 +19,7 @@ jobs:
       - name: Clone the code
         uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Run linter
