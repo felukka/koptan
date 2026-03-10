@@ -12,8 +12,6 @@ spec:
   image:
     registry: ghcr.io
     name: example/myapp
-  poll:
-    intervalSeconds: 60
 ---
 apiVersion: koptan.felukka.sh/v1alpha
 kind: Slipway
@@ -29,8 +27,6 @@ spec:
   image:
     registry: ghcr.io
     name: example/dotnet-api
-  poll:
-    intervalSeconds: 90
 ---
 apiVersion: koptan.felukka.sh/v1alpha
 kind: Slipway
@@ -46,8 +42,6 @@ spec:
   image:
     registry: ghcr.io
     name: example/java-api
-  poll:
-    intervalSeconds: 120
 ---
 apiVersion: koptan.felukka.sh/v1alpha
 kind: Slipway
@@ -63,8 +57,6 @@ spec:
   image:
     registry: ghcr.io
     name: example/myapp
-  poll:
-    intervalSeconds: 60
   extraSteps:
     - name: lint
       image: golangci/golangci-lint:latest

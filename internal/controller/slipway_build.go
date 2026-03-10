@@ -195,12 +195,6 @@ func (r *SlipwayReconciler) buildContainer(imageTag, dockerCfgSecret string) cor
 		Image:        buildahImage,
 		Command:      []string{"sh", "-c", script},
 		VolumeMounts: mounts,
-		SecurityContext: &corev1.SecurityContext{
-			Privileged: boolPtr(false),
-			Capabilities: &corev1.Capabilities{
-				Add: []corev1.Capability{"SETUID", "SETGID"},
-			},
-		},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -234,8 +228,6 @@ func buildahScript(imageTag, dockerCfgSecret string) string {
 
 	return strings.Join(parts, "\n")
 }
-
-func boolPtr(b bool) *bool { return &b }
 
 func buildDockerConfigJSON(registry, username, password string) ([]byte, error) {
 	auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))

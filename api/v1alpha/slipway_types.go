@@ -36,22 +36,12 @@ type RegistryCreds struct {
 	Password string `json:"password"`
 }
 
-type PollSpec struct {
-	// +kubebuilder:default=60
-	// +kubebuilder:validation:Minimum=10
-	// +optional
-	IntervalSeconds int64 `json:"intervalSeconds,omitempty"`
-}
-
 type SlipwaySpec struct {
 	// +required
 	AppRef AppRef `json:"appRef"`
 
 	// +required
 	Image ImageSpec `json:"image"`
-
-	// +optional
-	Poll PollSpec `json:"poll,omitempty"`
 
 	// +optional
 	ExtraSteps []corev1.Container `json:"extraSteps,omitempty"`
@@ -73,7 +63,6 @@ type SlipwayStatus struct {
 	LatestImage    string       `json:"latestImage,omitempty"`
 	BuildCount     int64        `json:"buildCount,omitempty"`
 	LastBuildTime  *metav1.Time `json:"lastBuildTime,omitempty"`
-	LastPollTime   *metav1.Time `json:"lastPollTime,omitempty"`
 	Message        string       `json:"message,omitempty"`
 	// +listType=map
 	// +listMapKey=type
@@ -84,6 +73,7 @@ type SlipwayStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.latestImage`
 // +kubebuilder:printcolumn:name="Revision",type=string,JSONPath=`.status.latestRevision`,priority=1
 // +kubebuilder:printcolumn:name="Builds",type=integer,JSONPath=`.status.buildCount`
