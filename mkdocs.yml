@@ -10,8 +10,8 @@ theme:
   logo: assets/koptan.png
   favicon: assets/koptan.png
   font:
-    text: IBM Plex Sans Condensed
-    code: JetBrains Mono
+    text: Roboto Condensed
+    code: Roboto Mono
   features:
     - navigation.footer
     - search.highlight
@@ -50,4 +50,8 @@ markdown_extensions:
       alternate_style: true
   - admonition
   - pymdownx.details
+extra_css:
+  - stylesheets/extra.css
+extra:
+  generator: false
 copyright: Copyright &copy; 2026 Felukka.org
