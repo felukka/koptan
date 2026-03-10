@@ -27,15 +27,14 @@ const (
 	condReady        = "Ready"
 	condBuild        = "BuildSucceeded"
 
-	gitImage    = "alpine/git:2.47.2"
-	kanikoImage = "ghcr.io/osscontainertools/kaniko/executor:v1.27.0"
+	gitImage     = "alpine/git:2.47.2"
+	buildahImage = "quay.io/buildah/stable:v1.38.0"
 
 	workspacePath      = "/tmp/workspace"
 	dockerfilePath     = "/dockerfile"
 	dockerfileVolume   = "app-dockerfile"
 	dockerConfigVolume = "docker-config"
-	dockerConfigPath   = "/kaniko/.docker"
-	dockerConfigKey    = "config.json"
+	dockerConfigPath   = "/auth"
 )
 
 type SlipwayReconciler struct {
@@ -89,13 +88,23 @@ func (r *SlipwayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	appPhase, configMapName, sourceRef, err := r.resolveApp(ctx, &sw)
 	if err != nil {
 		log.Error(err, "failed to resolve app")
-		err = r.setStatus(ctx, &sw, koptan.SlipwayPhaseFailed, fmt.Sprintf("app resolution failed: %v", err))
+		err = r.setStatus(
+			ctx,
+			&sw,
+			koptan.SlipwayPhaseFailed,
+			fmt.Sprintf("app resolution failed: %v", err),
+		)
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
 	}
 
 	if appPhase != koptan.AppPhaseReady {
 		log.Info("app not ready yet", "phase", appPhase)
-		err = r.setStatus(ctx, &sw, koptan.SlipwayPhaseIdle, fmt.Sprintf("waiting for app to be Ready (current: %s)", appPhase))
+		err = r.setStatus(
+			ctx,
+			&sw,
+			koptan.SlipwayPhaseIdle,
+			fmt.Sprintf("waiting for app to be Ready (current: %s)", appPhase),
+		)
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
 
@@ -131,7 +140,12 @@ func (r *SlipwayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	dockerCfgSecret, err := r.ensureDockerConfigSecret(ctx, &sw)
 	if err != nil {
 		log.Error(err, "failed to ensure docker config secret")
-		err = r.setStatus(ctx, &sw, koptan.SlipwayPhaseFailed, fmt.Sprintf("docker config secret failed: %v", err))
+		err = r.setStatus(
+			ctx,
+			&sw,
+			koptan.SlipwayPhaseFailed,
+			fmt.Sprintf("docker config secret failed: %v", err),
+		)
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
 	}
 
@@ -180,7 +194,11 @@ func (r *SlipwayReconciler) resolveApp(
 	case "DotnetApp":
 		var app koptan.DotnetApp
 		if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ns}, &app); err != nil {
-			return "", "", koptan.SourceRef{}, fmt.Errorf("DotnetApp %q not found: %w", ref.Name, err)
+			return "", "", koptan.SourceRef{}, fmt.Errorf(
+				"DotnetApp %q not found: %w",
+				ref.Name,
+				err,
+			)
 		}
 		return app.Status.Phase, app.Status.ConfigMapName, app.Spec.Source, nil
 
@@ -220,9 +238,9 @@ func (r *SlipwayReconciler) ensureDockerConfigSecret(
 				"felukka.sh/component": "registry-auth",
 			},
 		},
-		Type: corev1.SecretTypeOpaque,
+		Type: corev1.SecretTypeDockerConfigJson,
 		Data: map[string][]byte{
-			dockerConfigKey: configJSON,
+			".dockerconfigjson": configJSON,
 		},
 	}
 
@@ -301,7 +319,10 @@ func (r *SlipwayReconciler) startBuild(
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 }
 
-func (r *SlipwayReconciler) trackBuild(ctx context.Context, sw *koptan.Slipway) (ctrl.Result, error) {
+func (r *SlipwayReconciler) trackBuild(
+	ctx context.Context,
+	sw *koptan.Slipway,
+) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	var jobList batchv1.JobList
@@ -342,7 +363,10 @@ func (r *SlipwayReconciler) trackBuild(ctx context.Context, sw *koptan.Slipway) 
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 }
 
-func (r *SlipwayReconciler) buildSucceeded(ctx context.Context, sw *koptan.Slipway) (ctrl.Result, error) {
+func (r *SlipwayReconciler) buildSucceeded(
+	ctx context.Context,
+	sw *koptan.Slipway,
+) (ctrl.Result, error) {
 	sw.Status.Phase = koptan.SlipwayPhaseSucceeded
 	sw.Status.Message = ""
 
@@ -361,7 +385,11 @@ func (r *SlipwayReconciler) buildSucceeded(ctx context.Context, sw *koptan.Slipw
 	return r.requeuePoll(sw), err
 }
 
-func (r *SlipwayReconciler) buildFailed(ctx context.Context, sw *koptan.Slipway, msg string) (ctrl.Result, error) {
+func (r *SlipwayReconciler) buildFailed(
+	ctx context.Context,
+	sw *koptan.Slipway,
+	msg string,
+) (ctrl.Result, error) {
 	if msg == "" {
 		msg = "build job failed"
 	}
@@ -377,7 +405,12 @@ func (r *SlipwayReconciler) buildFailed(ctx context.Context, sw *koptan.Slipway,
 	return r.requeuePoll(sw), err
 }
 
-func (r *SlipwayReconciler) setStatus(ctx context.Context, sw *koptan.Slipway, phase koptan.SlipwayPhase, msg string) error {
+func (r *SlipwayReconciler) setStatus(
+	ctx context.Context,
+	sw *koptan.Slipway,
+	phase koptan.SlipwayPhase,
+	msg string,
+) error {
 	sw.Status.Phase = phase
 	sw.Status.Message = msg
 	return r.Status().Update(ctx, sw)
