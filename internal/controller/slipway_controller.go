@@ -28,7 +28,7 @@ const (
 	condBuild        = "BuildSucceeded"
 
 	gitImage     = "alpine/git:2.47.2"
-	buildahImage = "quay.io/buildah/stable:v1.38.0"
+	buildahImage = "quay.io/buildah/stable:v1.43.0"
 
 	workspacePath      = "/tmp/workspace"
 	dockerfilePath     = "/dockerfile"
@@ -270,6 +270,25 @@ func (r *SlipwayReconciler) ensureDockerConfigSecret(
 	return secretName, nil
 }
 
+func (r *SlipwayReconciler) hasActiveJob(
+	ctx context.Context,
+	sw *koptan.Slipway,
+) (bool, error) {
+	var jobList batchv1.JobList
+	err := r.List(ctx, &jobList, client.InNamespace(sw.Namespace), client.MatchingLabels{
+		"felukka.sh/slipway": sw.Name,
+	})
+	if err != nil {
+		return false, err
+	}
+	for i := range jobList.Items {
+		if jobList.Items[i].Status.Succeeded == 0 && jobList.Items[i].Status.Failed == 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *SlipwayReconciler) startBuild(
 	ctx context.Context,
 	sw *koptan.Slipway,
@@ -278,6 +297,14 @@ func (r *SlipwayReconciler) startBuild(
 	sourceRef koptan.SourceRef,
 	dockerCfgSecret string,
 ) (ctrl.Result, error) {
+	active, err := r.hasActiveJob(ctx, sw)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("checking for active build jobs: %w", err)
+	}
+	if active {
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
 	imageTag := fmt.Sprintf("%s/%s:%s", sw.Spec.Image.Registry, sw.Spec.Image.Name, sha[:12])
 
 	job := r.buildJob(sw, sha, configMapName, sourceRef, imageTag, dockerCfgSecret)
@@ -286,10 +313,17 @@ func (r *SlipwayReconciler) startBuild(
 	}
 
 	if err := r.Create(ctx, job); err != nil {
-		if errors.IsAlreadyExists(err) {
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-		}
 		return ctrl.Result{}, fmt.Errorf("creating build job: %w", err)
+	}
+
+	key := types.NamespacedName{Name: sw.Name, Namespace: sw.Namespace}
+	if err := r.Get(ctx, key, sw); err != nil {
+		return ctrl.Result{}, fmt.Errorf("re-fetching slipway after job creation: %w", err)
+	}
+
+	if sw.Status.Phase == koptan.SlipwayPhaseResolving ||
+		sw.Status.Phase == koptan.SlipwayPhaseBuilding {
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	now := metav1.Now()
