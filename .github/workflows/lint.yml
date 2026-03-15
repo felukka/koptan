@@ -2,15 +2,11 @@
 name: Lint
 on:
   push:
-    paths:
-      - internal/**
-      - api/**
-      - cmd/**
+    branches:
+      - main
   pull_request:
-    paths:
-      - internal/**
-      - api/**
-      - cmd/**
+    branches:
+      - main
 jobs:
   lint:
     name: Run on Ubuntu
