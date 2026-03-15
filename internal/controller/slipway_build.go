@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -84,7 +85,10 @@ func buildVolumes(configMapName, dockerCfgSecret string) []corev1.Volume {
 				Secret: &corev1.SecretVolumeSource{
 					SecretName: dockerCfgSecret,
 					Items: []corev1.KeyToPath{
-						{Key: dockerConfigKey, Path: dockerConfigKey},
+						{
+							Key:  ".dockerconfigjson",
+							Path: ".config.json",
+						},
 					},
 				},
 			},
@@ -171,11 +175,7 @@ git checkout FETCH_HEAD
 }
 
 func (r *SlipwayReconciler) buildContainer(imageTag, dockerCfgSecret string) corev1.Container {
-	args := []string{
-		"--dockerfile=" + dockerfilePath + "/Dockerfile",
-		"--context=dir://" + workspacePath,
-		"--destination=" + imageTag,
-	}
+	script := buildahScript(imageTag, dockerCfgSecret)
 
 	mounts := []corev1.VolumeMount{
 		{Name: "workspace", MountPath: workspacePath},
@@ -192,8 +192,8 @@ func (r *SlipwayReconciler) buildContainer(imageTag, dockerCfgSecret string) cor
 
 	return corev1.Container{
 		Name:         "build-push",
-		Image:        kanikoImage,
-		Args:         args,
+		Image:        buildahImage,
+		Command:      []string{"sh", "-c", script},
 		VolumeMounts: mounts,
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
@@ -206,6 +206,27 @@ func (r *SlipwayReconciler) buildContainer(imageTag, dockerCfgSecret string) cor
 			},
 		},
 	}
+}
+
+func buildahScript(imageTag, dockerCfgSecret string) string {
+	parts := []string{"set -e"}
+
+	authFlag := ""
+	if dockerCfgSecret != "" {
+		authFlag = fmt.Sprintf("--authfile %s/.config.json", dockerConfigPath)
+	}
+
+	parts = append(parts, fmt.Sprintf(
+		"buildah --storage-driver vfs build -f %s/Dockerfile -t %s %s",
+		dockerfilePath, imageTag, workspacePath,
+	))
+
+	parts = append(parts, fmt.Sprintf(
+		"buildah --storage-driver vfs push %s %s",
+		authFlag, imageTag,
+	))
+
+	return strings.Join(parts, "\n")
 }
 
 func buildDockerConfigJSON(registry, username, password string) ([]byte, error) {

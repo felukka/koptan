@@ -18,6 +18,9 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
+    - jsonPath: .status.message
+      name: Message
+      type: string
     - jsonPath: .status.latestImage
       name: Image
       type: string
@@ -1612,14 +1615,6 @@ spec:
                 - name
                 - registry
                 type: object
-              poll:
-                properties:
-                  intervalSeconds:
-                    default: 60
-                    format: int64
-                    minimum: 10
-                    type: integer
-                type: object
             required:
             - appRef
             - image
@@ -1689,9 +1684,6 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               lastBuildTime:
-                format: date-time
-                type: string
-              lastPollTime:
                 format: date-time
                 type: string
               latestImage:
