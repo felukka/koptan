@@ -1,0 +1,9 @@
+apiVersion: koptan.felukka.sh/v1alpha
+kind: JavaApp
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: javaapp-sample
+spec:
+  # TODO(user): Add fields here
