@@ -120,10 +120,8 @@ func GenerateGoApp(spec koptan.GoAppSpec) (string, error) {
 
 	fmt.Fprintf(&b, "ENV CGO_ENABLED=%s\n", cgoEnabled)
 
-	buildParts := []string{
-		"go build",
-		fmt.Sprintf("-ldflags %q", ldflags),
-	}
+	buildParts := make([]string, 0, 2+len(spec.BuildArgs))
+	buildParts = append(buildParts, "go build", fmt.Sprintf("-ldflags %q", ldflags))
 	buildParts = append(buildParts, spec.BuildArgs...)
 	buildParts = append(buildParts, fmt.Sprintf("-o /out/%s", binaryName))
 	buildParts = append(buildParts, entrypoint)

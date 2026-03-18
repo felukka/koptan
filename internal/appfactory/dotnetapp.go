@@ -93,6 +93,7 @@ func extractXMLValue(line, tag string) string {
 
 func frameworkToSDK(framework string) string {
 	framework = strings.ToLower(framework)
+
 	switch {
 	case strings.Contains(framework, "9.0"):
 		return "9.0"
@@ -103,6 +104,7 @@ func frameworkToSDK(framework string) string {
 	case strings.Contains(framework, "6.0"):
 		return "6.0"
 	}
+
 	return ""
 }
 

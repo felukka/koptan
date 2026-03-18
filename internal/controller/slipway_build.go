@@ -209,7 +209,8 @@ func (r *SlipwayReconciler) buildContainer(imageTag, dockerCfgSecret string) cor
 }
 
 func buildahScript(imageTag, dockerCfgSecret string) string {
-	parts := []string{"set -e"}
+	parts := make([]string, 0, 3)
+	parts = append(parts, "set -e")
 
 	authFlag := ""
 	if dockerCfgSecret != "" {
