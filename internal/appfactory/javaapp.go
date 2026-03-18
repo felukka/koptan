@@ -10,6 +10,11 @@ import (
 	koptan "github.com/felukka/koptan/api/v1alpha"
 )
 
+const (
+	mavenBuildTool  = "maven"
+	gradleBuildTool = "gradle"
+)
+
 type JavaInfo struct {
 	JavaVersion  string
 	BuildTool    string
@@ -20,13 +25,13 @@ func DiscoverJava(repoDir string) (*JavaInfo, error) {
 	info := &JavaInfo{}
 
 	if _, err := os.Stat(filepath.Join(repoDir, "pom.xml")); err == nil {
-		info.BuildTool = "maven"
+		info.BuildTool = mavenBuildTool
 	} else if _, err := os.Stat(filepath.Join(repoDir, "build.gradle")); err == nil {
-		info.BuildTool = "gradle"
+		info.BuildTool = gradleBuildTool
 	} else if _, err := os.Stat(filepath.Join(repoDir, "build.gradle.kts")); err == nil {
-		info.BuildTool = "gradle"
+		info.BuildTool = gradleBuildTool
 	} else {
-		return nil, fmt.Errorf("no pom.xml or build.gradle found in %s", repoDir)
+		return nil, fmt.Errorf("no pom.xml, build.gradle, or build.gradle.kts found in %s", repoDir)
 	}
 
 	info.JavaVersion = discoverJavaVersion(repoDir, info.BuildTool)
@@ -41,7 +46,7 @@ func DiscoverJava(repoDir string) (*JavaInfo, error) {
 
 func discoverJavaVersion(repoDir, buildTool string) string {
 	switch buildTool {
-	case "maven":
+	case mavenBuildTool:
 		f, err := os.Open(filepath.Join(repoDir, "pom.xml"))
 		if err != nil {
 			return ""
@@ -63,7 +68,7 @@ func discoverJavaVersion(repoDir, buildTool string) string {
 				return extractXMLValue(line, "maven.compiler.target")
 			}
 		}
-	case "gradle":
+	case gradleBuildTool:
 		for _, name := range []string{"build.gradle", "build.gradle.kts"} {
 			f, err := os.Open(filepath.Join(repoDir, name))
 			if err != nil {
@@ -99,11 +104,12 @@ func discoverJavaVersion(repoDir, buildTool string) string {
 
 func guessArtifactPath(buildTool string) string {
 	switch buildTool {
-	case "maven":
+	case mavenBuildTool:
 		return "target/*.jar"
-	case "gradle":
+	case gradleBuildTool:
 		return "build/libs/*.jar"
 	}
+
 	return "target/*.jar"
 }
 
@@ -117,7 +123,7 @@ func GenerateJavaApp(spec koptan.JavaAppSpec) (string, error) {
 	if spec.ArtifactPath == "" {
 		return "", fmt.Errorf("artifactPath is required")
 	}
-	if spec.BuildTool != "maven" && spec.BuildTool != "gradle" {
+	if spec.BuildTool != mavenBuildTool && spec.BuildTool != gradleBuildTool {
 		return "", fmt.Errorf("buildTool must be one of: maven, gradle; got %q", spec.BuildTool)
 	}
 
@@ -126,9 +132,9 @@ func GenerateJavaApp(spec koptan.JavaAppSpec) (string, error) {
 	var b strings.Builder
 
 	switch spec.BuildTool {
-	case "maven":
+	case mavenBuildTool:
 		fmt.Fprintf(&b, "FROM maven:3-eclipse-temurin-%s-alpine AS builder\n\n", spec.JavaVersion)
-	case "gradle":
+	case gradleBuildTool:
 		fmt.Fprintf(&b, "FROM gradle:jdk%s-alpine AS builder\n\n", spec.JavaVersion)
 	}
 
@@ -146,7 +152,7 @@ func GenerateJavaApp(spec koptan.JavaAppSpec) (string, error) {
 	}
 
 	switch spec.BuildTool {
-	case "maven":
+	case mavenBuildTool:
 		fmt.Fprintf(&b, "COPY pom.xml .\n")
 		fmt.Fprintf(&b, "RUN mvn dependency:go-offline -B -q\n\n")
 
@@ -164,7 +170,7 @@ func GenerateJavaApp(spec koptan.JavaAppSpec) (string, error) {
 		mvnParts = append(mvnParts, spec.BuildArgs...)
 		fmt.Fprintf(&b, "RUN %s\n\n", strings.Join(mvnParts, " "))
 
-	case "gradle":
+	case gradleBuildTool:
 		fmt.Fprintf(&b, "COPY build.gradle* settings.gradle* gradle.properties* ./\n")
 		fmt.Fprintf(&b, "COPY gradle/ gradle/\n")
 		fmt.Fprintf(&b, "COPY gradlew* ./\n")
@@ -177,7 +183,8 @@ func GenerateJavaApp(spec koptan.JavaAppSpec) (string, error) {
 			task = "build"
 		}
 
-		gradleParts := []string{"./gradlew", task, "--no-daemon", "-x", "test"}
+		gradleParts := make([]string, 0, 5+len(spec.BuildArgs))
+		gradleParts = append(gradleParts, "./gradlew", task, "--no-daemon", "-x", "test")
 		gradleParts = append(gradleParts, spec.BuildArgs...)
 		fmt.Fprintf(&b, "RUN %s\n\n", strings.Join(gradleParts, " "))
 	}

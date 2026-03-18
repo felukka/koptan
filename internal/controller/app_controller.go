@@ -52,7 +52,10 @@ func (r *AppReconciler) ReconcileGoApp(ctx context.Context, req ctrl.Request) (c
 	return r.reconcile(ctx, &goAppAdapter{&goApp})
 }
 
-func (r *AppReconciler) ReconcileDotnetApp(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AppReconciler) ReconcileDotnetApp(
+	ctx context.Context,
+	req ctrl.Request,
+) (ctrl.Result, error) {
 	var dotnetApp koptan.DotnetApp
 	if err := r.Get(ctx, req.NamespacedName, &dotnetApp); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -60,7 +63,10 @@ func (r *AppReconciler) ReconcileDotnetApp(ctx context.Context, req ctrl.Request
 	return r.reconcile(ctx, &dotnetAppAdapter{&dotnetApp})
 }
 
-func (r *AppReconciler) ReconcileJavaApp(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AppReconciler) ReconcileJavaApp(
+	ctx context.Context,
+	req ctrl.Request,
+) (ctrl.Result, error) {
 	var javaApp koptan.JavaApp
 	if err := r.Get(ctx, req.NamespacedName, &javaApp); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -105,18 +111,18 @@ func (r *AppReconciler) reconcile(ctx context.Context, app App) (ctrl.Result, er
 
 	token, err := r.resolveToken(ctx, app.GetNamespace(), src)
 	if err != nil {
-		return r.failWith(ctx, app, "TokenResolveFailed", err.Error())
+		return ctrl.Result{}, r.failWith(ctx, app, "TokenResolveFailed", err.Error())
 	}
 
 	if token != "" {
 		if err := r.ensureAuthSecret(ctx, app, token); err != nil {
-			return r.failWith(ctx, app, "AuthSecretFailed", err.Error())
+			return ctrl.Result{}, r.failWith(ctx, app, "AuthSecretFailed", err.Error())
 		}
 	}
 
 	cloneDir, err := os.MkdirTemp("", "koptan-discover-*")
 	if err != nil {
-		return r.failWith(ctx, app, "TmpDirFailed", err.Error())
+		return ctrl.Result{}, r.failWith(ctx, app, "TmpDirFailed", err.Error())
 	}
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
@@ -128,13 +134,18 @@ func (r *AppReconciler) reconcile(ctx context.Context, app App) (ctrl.Result, er
 		Dir:      cloneDir,
 	})
 	if err != nil {
-		return r.failWith(ctx, app, "CloneFailed", fmt.Sprintf("clone failed: %v", err))
+		return ctrl.Result{}, r.failWith(
+			ctx,
+			app,
+			"CloneFailed",
+			fmt.Sprintf("clone failed: %v", err),
+		)
 	}
 
 	log.Info("running discovery on cloned repo")
 	content, err := app.RunDiscoveryAndGenerate(cloneDir)
 	if err != nil {
-		return r.failWith(ctx, app, "DiscoveryFailed", err.Error())
+		return ctrl.Result{}, r.failWith(ctx, app, "DiscoveryFailed", err.Error())
 	}
 
 	cmName := app.GetName() + "-dockerfile"
@@ -148,7 +159,11 @@ func (r *AppReconciler) reconcile(ctx context.Context, app App) (ctrl.Result, er
 	return ctrl.Result{}, nil
 }
 
-func (r *AppReconciler) resolveToken(ctx context.Context, namespace string, src koptan.SourceRef) (string, error) {
+func (r *AppReconciler) resolveToken(
+	ctx context.Context,
+	namespace string,
+	src koptan.SourceRef,
+) (string, error) {
 	if src.PATToken == "" {
 		return "", nil
 	}
@@ -157,7 +172,11 @@ func (r *AppReconciler) resolveToken(ctx context.Context, namespace string, src 
 	key := types.NamespacedName{Name: src.PATToken, Namespace: namespace}
 	if err := r.Get(ctx, key, &secret); err != nil {
 		if errors.IsNotFound(err) {
-			return "", fmt.Errorf("pat secret %q not found in namespace %q", src.PATToken, namespace)
+			return "", fmt.Errorf(
+				"pat secret %q not found in namespace %q",
+				src.PATToken,
+				namespace,
+			)
 		}
 		return "", fmt.Errorf("getting pat secret %q: %w", src.PATToken, err)
 	}
@@ -214,7 +233,11 @@ func AuthSecretNameFor(appName string) string {
 	return appName + authSecretName
 }
 
-func (r *AppReconciler) reconcileConfigMap(ctx context.Context, app App, cmName, content string) error {
+func (r *AppReconciler) reconcileConfigMap(
+	ctx context.Context,
+	app App,
+	cmName, content string,
+) error {
 	log := logf.FromContext(ctx)
 
 	desired := &corev1.ConfigMap{
@@ -282,11 +305,12 @@ func (r *AppReconciler) setReady(ctx context.Context, app App, cmName string) er
 	return r.statusUpdate(ctx, app)
 }
 
-func (r *AppReconciler) failWith(ctx context.Context, app App, reason, msg string) (ctrl.Result, error) {
+func (r *AppReconciler) failWith(ctx context.Context, app App, reason, msg string) error {
 	if err := r.setFailed(ctx, app, reason, msg); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
-	return ctrl.Result{}, fmt.Errorf("%s: %s", reason, msg)
+
+	return fmt.Errorf("%s: %s", reason, msg)
 }
 
 func (r *AppReconciler) setFailed(ctx context.Context, app App, reason, msg string) error {
