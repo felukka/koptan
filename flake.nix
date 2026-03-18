@@ -6,7 +6,8 @@
   outputs =
     { self, nixpkgs }:
     let
-      version = builtins.substring 0 8 (self.lastModifiedDate or self.lastModified or "19700101");
+      name = "koptan";
+      version = "0.1";
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -20,14 +21,37 @@
         in
         {
           default = pkgs.buildGoModule {
-            pname = "koptan";
+            pname = name;
             inherit version;
             src = ./.;
             subPackages = [ "cmd/..." ];
-            vendorHash = "sha256-tKf1DkA4RAfmQA+4SSPi80BCV5bdFZCWbXuBzU4Ogdk=";
+            vendorHash = "sha256-sJlzlja7v4Db9B1GUBK1ISvKBdu6lzOSpd3wSSQPxJQ=";
+
+            meta = with pkgs.lib; {
+              description = ''
+                Koptan is a DevOps citizen tool that helps you automate the full cycle
+                 deployment in Kubernetes.
+              '';
+              homepage = "https://felukka.org";
+              platforms = platforms.linux;
+            };
+          };
+
+          docker = pkgs.dockerTools.buildImage {
+            inherit name;
+            tag = version;
+            copyToRoot = pkgs.buildEnv {
+              name = "image-root";
+              paths = [ self.packages.${system}.default ];
+              pathsToLink = [ "/bin" ];
+            };
+            config = {
+              Cmd = [ "/bin/koptan" ];
+            };
           };
         }
       );
+
       devShells = nixpkgs.lib.genAttrs systems (
         system:
         let

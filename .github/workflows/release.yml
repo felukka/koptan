@@ -1,0 +1,45 @@
+---
+name: Release Pipeline
+on:
+  push:
+    tags:
+      - '*'
+jobs:
+  build-and-release:
+    name: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build Binary
+        run: nix build .#default
+      - name: Build Docker
+        run: nix build .#docker
+      - name: Log in to Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Load, Tag, and Push Docker image
+        env:
+          REPO: ghcr.io/koptan
+        run: |-
+          set -euo pipefail
+          LOAD_OUTPUT=$(docker load -i result)
+          LOADED_IMAGE=$(echo "$LOAD_OUTPUT" | sed -n 's/.*Loaded image: //p')
+          TAG="${GITHUB_REF#refs/tags/}"
+          docker tag "$LOADED_IMAGE" "$REPO:$TAG"
+          docker tag "$LOADED_IMAGE" "$REPO:latest"
+          docker push "$TARGET_REPO:$TAG"
+          docker push "$TARGET_REPO:latest"
