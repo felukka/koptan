@@ -72,11 +72,68 @@ spec:
                 - kind
                 - name
                 type: object
-              extraSteps:
+              steps:
                 items:
-                  description: A single application container that you want to run
-                    within a pod.
                   properties:
+                    custom:
+                      properties:
+                        args:
+                          items:
+                            type: string
+                          type: array
+                        command:
+                          items:
+                            type: string
+                          type: array
+                        image:
+                          type: string
+                        env:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                              valueFrom:
+                                properties:
+                                  configMapKeyRef:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        type: string
+                                      optional:
+                                        type: boolean
+                                    required:
+                                    - key
+                                    type: object
+                                  secretKeyRef:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        type: string
+                                      optional:
+                                        type: boolean
+                                    required:
+                                    - key
+                                    type: object
+                                type: object
+                            required:
+                            - name
+                            type: object
+                          type: array
+                      required:
+                      - image
+                      type: object
+                    name:
+                      type: string
+                    params:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    type:
+                      type: string
                     args:
                       description: |-
                         Arguments to the entrypoint.

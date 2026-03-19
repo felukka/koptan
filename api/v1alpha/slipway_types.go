@@ -36,6 +36,34 @@ type RegistryCreds struct {
 	Password string `json:"password"`
 }
 
+type CustomStep struct {
+	// +required
+	Image string `json:"image"`
+
+	// +optional
+	Command []string `json:"command,omitempty"`
+
+	// +optional
+	Args []string `json:"args,omitempty"`
+
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
+}
+
+type Step struct {
+	// +required
+	Name string `json:"name"`
+
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// +optional
+	Params map[string]string `json:"params,omitempty"`
+
+	// +optional
+	Custom *CustomStep `json:"custom,omitempty"`
+}
+
 type SlipwaySpec struct {
 	// +required
 	AppRef AppRef `json:"appRef"`
@@ -44,7 +72,7 @@ type SlipwaySpec struct {
 	Image ImageSpec `json:"image"`
 
 	// +optional
-	ExtraSteps []corev1.Container `json:"extraSteps,omitempty"`
+	Steps []Step `json:"steps,omitempty"`
 }
 
 type SlipwayPhase string
@@ -58,12 +86,12 @@ const (
 )
 
 type SlipwayStatus struct {
-	Phase          SlipwayPhase `json:"phase,omitempty"`
-	LatestRevision string       `json:"latestRevision,omitempty"`
-	LatestImage    string       `json:"latestImage,omitempty"`
-	BuildCount     int64        `json:"buildCount,omitempty"`
-	LastBuildTime  *metav1.Time `json:"lastBuildTime,omitempty"`
-	Message        string       `json:"message,omitempty"`
+	Phase          SlipwayPhase       `json:"phase,omitempty"`
+	LatestRevision string             `json:"latestRevision,omitempty"`
+	LatestImage    string             `json:"latestImage,omitempty"`
+	BuildCount     int64              `json:"buildCount,omitempty"`
+	LastBuildTime  *metav1.Time       `json:"lastBuildTime,omitempty"`
+	Message        string             `json:"message,omitempty"`
 	// +listType=map
 	// +listMapKey=type
 	// +optional
