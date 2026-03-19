@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,47 +13,34 @@ import (
 	koptan "github.com/felukka/koptan/api/v1alpha"
 )
 
-func (r *SlipwayReconciler) buildJob(
+func (r *SlipwayReconciler) buildPod(
 	sw *koptan.Slipway,
 	sha string,
 	configMapName string,
 	sourceRef koptan.SourceRef,
 	imageTag string,
 	dockerCfgSecret string,
-) *batchv1.Job {
-	var backoffLimit int32 = 0
-	var ttlSeconds int32 = 600
-
+) *corev1.Pod {
 	volumes := buildVolumes(configMapName, dockerCfgSecret)
 	initContainers := r.buildInitContainers(sw, sourceRef, sha)
 	buildPush := r.buildContainer(imageTag, dockerCfgSecret)
 
-	return &batchv1.Job{
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: sw.Name + "-build-",
 			Namespace:    sw.Namespace,
 			Labels: map[string]string{
 				"felukka.sh/slipway":   sw.Name,
-				"felukka.sh/component": "build",
+				"felukka.sh/component": "slipway",
+				"felukka.sh/function":  "ci",
+				"felukka.sh/revision":  sha,
 			},
 		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &ttlSeconds,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"felukka.sh/slipway":   sw.Name,
-						"felukka.sh/component": "build",
-					},
-				},
-				Spec: corev1.PodSpec{
-					RestartPolicy:  corev1.RestartPolicyNever,
-					InitContainers: initContainers,
-					Containers:     []corev1.Container{buildPush},
-					Volumes:        volumes,
-				},
-			},
+		Spec: corev1.PodSpec{
+			RestartPolicy:  corev1.RestartPolicyNever,
+			InitContainers: initContainers,
+			Containers:     []corev1.Container{buildPush},
+			Volumes:        volumes,
 		},
 	}
 }

@@ -9,7 +9,7 @@ jobs:
     name: release
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout
@@ -41,8 +41,8 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           docker tag "$LOADED_IMAGE" "$REPO:$TAG"
           docker tag "$LOADED_IMAGE" "$REPO:latest"
-          docker push "$TARGET_REPO:$TAG"
-          docker push "$TARGET_REPO:latest"
+          docker push "$REPO:$TAG"
+          docker push "$REPO:latest"
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
