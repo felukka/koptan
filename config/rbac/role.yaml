@@ -22,6 +22,8 @@ rules:
   resources:
   - pods
   verbs:
+  - create
+  - delete
   - get
   - list
   - watch
@@ -47,16 +49,6 @@ rules:
   - list
   - patch
   - update
-  - watch
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
   - watch
 - apiGroups:
   - koptan.felukka.sh
