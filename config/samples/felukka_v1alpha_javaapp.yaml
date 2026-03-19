@@ -1,4 +1,4 @@
-apiVersion: koptan.felukka.sh/v1alpha
+apiVersion: koptan.felukka.org/v1alpha
 kind: JavaApp
 metadata:
   labels:
@@ -10,7 +10,7 @@ spec:
     repo: https://github.com/example/java-api
     revision: main
 ---
-apiVersion: koptan.felukka.sh/v1alpha
+apiVersion: koptan.felukka.org/v1alpha
 kind: JavaApp
 metadata:
   labels:
@@ -37,7 +37,7 @@ spec:
   env:
     MAVEN_OPTS: "-Xmx1g"
 ---
-apiVersion: koptan.felukka.sh/v1alpha
+apiVersion: koptan.felukka.org/v1alpha
 kind: JavaApp
 metadata:
   labels:

@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	appFinalizer   = "felukka.sh/app-cleanup"
+	appFinalizer   = "felukka.org/app-cleanup"
 	dockerfileKey  = "dockerfile"
 	patSecretKey   = "token"
 	authSecretName = "-git-auth"
@@ -32,15 +32,15 @@ type AppReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=goapps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=goapps/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=goapps/finalizers,verbs=update
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=dotnetapps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=dotnetapps/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=dotnetapps/finalizers,verbs=update
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=javaapps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=javaapps/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=javaapps/finalizers,verbs=update
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=goapps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=goapps/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=goapps/finalizers,verbs=update
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=dotnetapps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=dotnetapps/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=dotnetapps/finalizers,verbs=update
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=javaapps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=javaapps/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=javaapps/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 
@@ -196,8 +196,8 @@ func (r *AppReconciler) ensureAuthSecret(ctx context.Context, app App, token str
 			Name:      secretName,
 			Namespace: app.GetNamespace(),
 			Labels: map[string]string{
-				"felukka.sh/app":       app.GetName(),
-				"felukka.sh/component": "git-auth",
+				"felukka.org/app":       app.GetName(),
+				"felukka.org/component": "git-auth",
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -245,9 +245,9 @@ func (r *AppReconciler) reconcileConfigMap(
 			Name:      cmName,
 			Namespace: app.GetNamespace(),
 			Labels: map[string]string{
-				"felukka.sh/app":       app.GetName(),
-				"felukka.sh/app-kind":  app.GetObjectKind().GroupVersionKind().Kind,
-				"felukka.sh/component": "dockerfile",
+				"felukka.org/app":       app.GetName(),
+				"felukka.org/app-kind":  app.GetObjectKind().GroupVersionKind().Kind,
+				"felukka.org/component": "dockerfile",
 			},
 		},
 		Data: map[string]string{

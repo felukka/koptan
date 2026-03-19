@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	slipwayFinalizer = "felukka.sh/slipway-cleanup"
+	slipwayFinalizer = "felukka.org/slipway-cleanup"
 	condReady        = "Ready"
 	condBuild        = "BuildSucceeded"
 
@@ -42,18 +42,18 @@ type SlipwayReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=slipways,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=slipways/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=slipways/finalizers,verbs=update
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=slipways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=slipways/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=slipways/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=goapps,verbs=get;list;watch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=goapps/status,verbs=get
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=dotnetapps,verbs=get;list;watch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=dotnetapps/status,verbs=get
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=javaapps,verbs=get;list;watch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=javaapps/status,verbs=get
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=goapps,verbs=get;list;watch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=goapps/status,verbs=get
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=dotnetapps,verbs=get;list;watch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=dotnetapps/status,verbs=get
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=javaapps,verbs=get;list;watch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=javaapps/status,verbs=get
 
 func (r *SlipwayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -218,7 +218,7 @@ func (r *SlipwayReconciler) ensureDockerConfigSecret(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: sw.Namespace,
-			Labels:    map[string]string{"felukka.sh/slipway": sw.Name},
+			Labels:    map[string]string{"felukka.org/slipway": sw.Name},
 		},
 		Type: corev1.SecretTypeDockerConfigJson,
 		Data: map[string][]byte{".dockerconfigjson": configJSON},
@@ -252,7 +252,7 @@ func (r *SlipwayReconciler) hasActivePod(ctx context.Context, sw *koptan.Slipway
 		ctx,
 		&podList,
 		client.InNamespace(sw.Namespace),
-		client.MatchingLabels{"felukka.sh/slipway": sw.Name},
+		client.MatchingLabels{"felukka.org/slipway": sw.Name},
 	); err != nil {
 		return false, err
 	}
@@ -324,7 +324,7 @@ func (r *SlipwayReconciler) trackBuild(
 ) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
 	var podList corev1.PodList
-	if err := r.List(ctx, &podList, client.InNamespace(sw.Namespace), client.MatchingLabels{"felukka.sh/slipway": sw.Name}); err != nil {
+	if err := r.List(ctx, &podList, client.InNamespace(sw.Namespace), client.MatchingLabels{"felukka.org/slipway": sw.Name}); err != nil {
 		return ctrl.Result{}, err
 	}
 

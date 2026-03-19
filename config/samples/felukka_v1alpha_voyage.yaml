@@ -1,4 +1,4 @@
-apiVersion: koptan.felukka.sh/v1alpha
+apiVersion: koptan.felukka.org/v1alpha
 kind: Voyage
 metadata:
   labels:
@@ -11,7 +11,7 @@ spec:
   port: 8080
   replicas: 2
 ---
-apiVersion: koptan.felukka.sh/v1alpha
+apiVersion: koptan.felukka.org/v1alpha
 kind: Voyage
 metadata:
   labels:
@@ -29,7 +29,7 @@ spec:
     memoryRequest: 128Mi
     memoryLimit: 512Mi
 ---
-apiVersion: koptan.felukka.sh/v1alpha
+apiVersion: koptan.felukka.org/v1alpha
 kind: Voyage
 metadata:
   labels:

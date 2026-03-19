@@ -1,5 +1,5 @@
 // +kubebuilder:object:generate=true
-// +groupName=koptan.felukka.sh
+// +groupName=koptan.felukka.org
 package v1alpha
 
 import (
@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	GroupVersion  = schema.GroupVersion{Group: "koptan.felukka.sh", Version: "v1alpha"}
+	GroupVersion  = schema.GroupVersion{Group: "koptan.felukka.org", Version: "v1alpha"}
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
 	AddToScheme   = SchemeBuilder.AddToScheme
 )

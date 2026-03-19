@@ -1,4 +1,4 @@
-apiVersion: koptan.felukka.sh/v1alpha
+apiVersion: koptan.felukka.org/v1alpha
 kind: GoApp
 metadata:
   labels:
@@ -10,7 +10,7 @@ spec:
     repo: https://github.com/example/myapp
     revision: main
 ---
-apiVersion: koptan.felukka.sh/v1alpha
+apiVersion: koptan.felukka.org/v1alpha
 kind: GoApp
 metadata:
   name: goapp-full-example
