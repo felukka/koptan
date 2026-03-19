@@ -3,7 +3,7 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: v4.10.1
-domain: felukka.sh
+domain: felukka.org
 layout:
 - go.kubebuilder.io/v4
 plugins:
@@ -15,7 +15,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: felukka.sh
+  domain: felukka.org
   group: koptan
   kind: Voyage
   path: github.com/felukka/koptan/api/v1alpha
@@ -24,7 +24,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: felukka.sh
+  domain: felukka.org
   group: koptan
   kind: GoApp
   path: github.com/felukka/koptan/api/v1alpha
@@ -33,7 +33,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: felukka.sh
+  domain: felukka.org
   group: koptan
   kind: DotnetApp
   path: github.com/felukka/koptan/api/v1alpha
@@ -42,7 +42,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: felukka.sh
+  domain: felukka.org
   group: koptan
   kind: JavaApp
   path: github.com/felukka/koptan/api/v1alpha

@@ -1,7 +1,7 @@
 # This rule is not used by the project koptan itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read-only access to koptan.felukka.sh resources.
+# Grants read-only access to koptan.felukka.org resources.
 # This role is intended for users who need visibility into these resources
 # without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
 
@@ -14,7 +14,7 @@ metadata:
   name: javaapp-viewer-role
 rules:
 - apiGroups:
-  - koptan.felukka.sh
+  - koptan.felukka.org
   resources:
   - javaapps
   verbs:
@@ -22,7 +22,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - koptan.felukka.sh
+  - koptan.felukka.org
   resources:
   - javaapps/status
   verbs:

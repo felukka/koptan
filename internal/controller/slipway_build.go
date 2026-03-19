@@ -30,10 +30,10 @@ func (r *SlipwayReconciler) buildPod(
 			GenerateName: sw.Name + "-build-",
 			Namespace:    sw.Namespace,
 			Labels: map[string]string{
-				"felukka.sh/slipway":   sw.Name,
-				"felukka.sh/component": "slipway",
-				"felukka.sh/function":  "ci",
-				"felukka.sh/revision":  sha,
+				"felukka.org/slipway":   sw.Name,
+				"felukka.org/component": "slipway",
+				"felukka.org/function":  "ci",
+				"felukka.org/revision":  sha,
 			},
 		},
 		Spec: corev1.PodSpec{

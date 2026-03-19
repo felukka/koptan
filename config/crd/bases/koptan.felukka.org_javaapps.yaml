@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: dotnetapps.koptan.felukka.sh
+  name: javaapps.koptan.felukka.org
 spec:
-  group: koptan.felukka.sh
+  group: koptan.felukka.org
   names:
-    kind: DotnetApp
-    listKind: DotnetAppList
-    plural: dotnetapps
-    singular: dotnetapp
+    kind: JavaApp
+    listKind: JavaAppList
+    plural: javaapps
+    singular: javaapp
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -21,8 +21,8 @@ spec:
     - jsonPath: .status.configMapName
       name: ConfigMap
       type: string
-    - jsonPath: .status.discoveredSDKVersion
-      name: SDKVersion
+    - jsonPath: .status.discoveredBuildTool
+      name: BuildTool
       type: string
     - jsonPath: .status.error
       name: Error
@@ -54,32 +54,39 @@ spec:
             type: object
           spec:
             properties:
+              artifactPath:
+                type: string
               buildArgs:
                 items:
                   type: string
                 type: array
-              configuration:
-                default: Release
+              buildTool:
+                enum:
+                - maven
+                - gradle
                 type: string
               env:
                 additionalProperties:
                   type: string
                 type: object
-              extraNugetSources:
-                items:
-                  type: string
-                type: array
               extraPackages:
                 items:
                   type: string
                 type: array
-              projectPath:
+              gradleTask:
+                default: build
                 type: string
-              sdkVersion:
+              javaVersion:
                 type: string
-              selfContained:
-                default: false
-                type: boolean
+              jvmArgs:
+                type: string
+              mavenGoal:
+                default: package
+                type: string
+              mavenProfiles:
+                items:
+                  type: string
+                type: array
               source:
                 properties:
                   patToken:
@@ -94,6 +101,9 @@ spec:
                 required:
                 - repo
                 type: object
+              springBoot:
+                default: false
+                type: boolean
             required:
             - source
             type: object
@@ -160,9 +170,11 @@ spec:
                 x-kubernetes-list-type: map
               configMapName:
                 type: string
-              discoveredProjectPath:
+              discoveredArtifactPath:
                 type: string
-              discoveredSDKVersion:
+              discoveredBuildTool:
+                type: string
+              discoveredJavaVersion:
                 type: string
               error:
                 type: string

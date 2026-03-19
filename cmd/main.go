@@ -90,7 +90,7 @@ func main() {
 		WebhookServer:          webhook.NewServer(webhookOpts),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "ca42ca73.felukka.sh",
+		LeaderElectionID:       "ca42ca73.felukka.org",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

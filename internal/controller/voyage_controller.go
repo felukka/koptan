@@ -21,17 +21,17 @@ import (
 	koptan "github.com/felukka/koptan/api/v1alpha"
 )
 
-const voyageFinalizer = "felukka.sh/voyage-cleanup"
+const voyageFinalizer = "felukka.org/voyage-cleanup"
 
 type VoyageReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=voyages,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=voyages/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=voyages/finalizers,verbs=update
-// +kubebuilder:rbac:groups=koptan.felukka.sh,resources=slipways,verbs=get;list;watch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=voyages,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=voyages/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=voyages/finalizers,verbs=update
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=slipways,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
@@ -92,8 +92,8 @@ func (r *VoyageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 func (r *VoyageReconciler) reconcileDeployment(ctx context.Context, voyage *koptan.Voyage, image string) error {
 	labels := map[string]string{
-		"felukka.sh/voyage":    voyage.Name,
-		"felukka.sh/component": "app",
+		"felukka.org/voyage":    voyage.Name,
+		"felukka.org/component": "app",
 	}
 
 	replicas := voyage.Spec.Replicas
@@ -193,8 +193,8 @@ func (r *VoyageReconciler) reconcileDeployment(ctx context.Context, voyage *kopt
 
 func (r *VoyageReconciler) reconcileService(ctx context.Context, voyage *koptan.Voyage) error {
 	labels := map[string]string{
-		"felukka.sh/voyage":    voyage.Name,
-		"felukka.sh/component": "app",
+		"felukka.org/voyage":    voyage.Name,
+		"felukka.org/component": "app",
 	}
 
 	desired := &corev1.Service{
