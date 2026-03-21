@@ -20,6 +20,7 @@ import (
 	"context"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,9 +36,10 @@ var voyagelog = logf.Log.WithName("voyage-resource")
 
 // SetupVoyageWebhookWithManager registers the webhook for Voyage in the manager.
 func SetupVoyageWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.Voyage{}).
-		WithValidator(&VoyageCustomValidator{}).
-		WithDefaulter(&VoyageCustomDefaulter{}).
+	return ctrl.NewWebhookManagedBy(mgr).
+		For(&koptanv1alpha.JavaApp{}).
+		WithValidator(&JavaAppCustomValidator{}).
+		WithDefaulter(&JavaAppCustomDefaulter{}).
 		Complete()
 }
 
@@ -55,12 +57,19 @@ type VoyageCustomDefaulter struct {
 }
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Voyage.
-func (d *VoyageCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.Voyage) error {
-	voyagelog.Info("Defaulting for Voyage", "name", obj.GetName())
+func (d *VoyageCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	// Type assertion to ensure that obj is a *Voyage
+	voyage, ok := obj.(*koptanv1alpha.Voyage)
+	if !ok {
+		return apierrors.NewBadRequest("expected Voyage object")
+	}
+
+	// Log the defaulting action
+	voyagelog.Info("Defaulting for Voyage", "name", voyage.GetName())
 
 	// Default resources if not set
-	if obj.Spec.Resources == nil {
-		obj.Spec.Resources = &koptanv1alpha.Resources{}
+	if voyage.Spec.Resources == nil {
+		voyage.Spec.Resources = &koptanv1alpha.Resources{}
 	}
 
 	return nil
@@ -80,25 +89,45 @@ type VoyageCustomValidator struct {
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type Voyage.
-func (v *VoyageCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.Voyage) (admission.Warnings, error) {
-	voyagelog.Info("Validation for Voyage upon creation", "name", obj.GetName())
+func (v *VoyageCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	// Type assertion to ensure that obj is a *Voyage
+	voyage, ok := obj.(*koptanv1alpha.Voyage)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected Voyage object")
+	}
 
-	return nil, v.validateVoyage(obj)
+	// Log the validation action
+	voyagelog.Info("Validation for Voyage upon creation", "name", voyage.GetName())
+
+	// Call the validation logic for Voyage
+	return nil, v.validateVoyage(voyage)
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type Voyage.
-func (v *VoyageCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.Voyage) (admission.Warnings, error) {
-	voyagelog.Info("Validation for Voyage upon update", "name", newObj.GetName())
+func (v *VoyageCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	// Type assertion to ensure that newObj is a *Voyage
+	newVoyage, ok := newObj.(*koptanv1alpha.Voyage)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected Voyage object")
+	}
 
-	return nil, v.validateVoyage(newObj)
+	// Log the validation action
+	voyagelog.Info("Validation for Voyage upon update", "name", newVoyage.GetName())
+
+	// Call the same validation logic for updates
+	return nil, v.validateVoyage(newVoyage)
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type Voyage.
-func (v *VoyageCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.Voyage) (admission.Warnings, error) {
-	voyagelog.Info("Validation for Voyage upon deletion", "name", obj.GetName())
+func (v *VoyageCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	// Type assertion to ensure that obj is a *Voyage
+	voyage, ok := obj.(*koptanv1alpha.Voyage)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected Voyage object")
+	}
 
-	// TODO(user): fill in your validation logic upon object deletion.
+	// Log the validation action
+	voyagelog.Info("Validation for Voyage upon deletion", "name", voyage.GetName())
 
+	// No specific validation required for delete
 	return nil, nil
 }
 

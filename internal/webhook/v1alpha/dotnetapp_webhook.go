@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,9 +22,10 @@ var dotnetAppLog = logf.Log.WithName("dotnetapp-resource")
 
 // SetupDotnetAppWebhookWithManager registers the webhook for DotnetApp in the manager.
 func SetupDotnetAppWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.DotnetApp{}).
-		WithValidator(&DotnetAppCustomValidator{}).
-		WithDefaulter(&DotnetAppCustomDefaulter{}).
+	return ctrl.NewWebhookManagedBy(mgr).
+		For(&koptanv1alpha.JavaApp{}).
+		WithValidator(&JavaAppCustomValidator{}).
+		WithDefaulter(&JavaAppCustomDefaulter{}).
 		Complete()
 }
 
@@ -32,27 +34,28 @@ func SetupDotnetAppWebhookWithManager(mgr ctrl.Manager) error {
 type DotnetAppCustomDefaulter struct{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind DotnetApp.
-func (d *DotnetAppCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.DotnetApp) error {
-	dotnetAppLog.Info("Defaulting for DotnetApp", "name", obj.GetName())
-
-	// Default for SDKVersion
-	if obj.Spec.SDKVersion == "" {
-		obj.Spec.SDKVersion = "6.0"
+func (d *DotnetAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	dotnetApp, ok := obj.(*koptanv1alpha.DotnetApp)
+	if !ok {
+		return apierrors.NewBadRequest("expected DotnetApp object")
 	}
 
-	// Default for Configuration
-	if obj.Spec.Configuration == "" {
-		obj.Spec.Configuration = "Release"
+	dotnetAppLog.Info("Defaulting for DotnetApp", "name", dotnetApp.GetName())
+
+	if dotnetApp.Spec.SDKVersion == "" {
+		dotnetApp.Spec.SDKVersion = "8.0"
 	}
 
-	// Default for ExtraPackages
-	if obj.Spec.ExtraPackages == nil {
-		obj.Spec.ExtraPackages = []string{} // No default packages
+	if dotnetApp.Spec.Configuration == "" {
+		dotnetApp.Spec.Configuration = "Release"
 	}
 
-	// Default for Env
-	if obj.Spec.Env == nil {
-		obj.Spec.Env = map[string]string{} // Empty environment if not set
+	if dotnetApp.Spec.ExtraPackages == nil {
+		dotnetApp.Spec.ExtraPackages = []string{}
+	}
+
+	if dotnetApp.Spec.Env == nil {
+		dotnetApp.Spec.Env = map[string]string{}
 	}
 
 	return nil
@@ -61,18 +64,31 @@ func (d *DotnetAppCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha
 // DotnetAppCustomValidator struct is responsible for validating the DotnetApp resource
 type DotnetAppCustomValidator struct{}
 
-func (v *DotnetAppCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.DotnetApp) (admission.Warnings, error) {
-	dotnetAppLog.Info("Validation for DotnetApp upon creation", "name", obj.GetName())
-	return nil, v.validateDotnetApp(obj)
+func (v *DotnetAppCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	dotnetApp, ok := obj.(*koptanv1alpha.DotnetApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected DotnetApp object")
+	}
+	dotnetAppLog.Info("Validation for DotnetApp upon creation", "name", dotnetApp.GetName())
+	return nil, v.validateDotnetApp(dotnetApp)
 }
 
-func (v *DotnetAppCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.DotnetApp) (admission.Warnings, error) {
-	dotnetAppLog.Info("Validation for DotnetApp upon update", "name", newObj.GetName())
+func (v *DotnetAppCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	newdotnetApp, ok := newObj.(*koptanv1alpha.DotnetApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected DotnetApp object")
+	}
+	dotnetAppLog.Info("Validation for DotnetApp upon update", "name", newdotnetApp.GetName())
 	// Calling the same validation logic for updates
-	return nil, v.validateDotnetApp(newObj)
+	return nil, v.validateDotnetApp(newdotnetApp)
 }
 
-func (v *DotnetAppCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.DotnetApp) (admission.Warnings, error) {
+func (v *DotnetAppCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	dotnetApp, ok := obj.(*koptanv1alpha.DotnetApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected DotnetApp object")
+	}
+	dotnetAppLog.Info("Validation for DotnetApp upon deletion", "name", dotnetApp.GetName())
 	return nil, nil
 }
 

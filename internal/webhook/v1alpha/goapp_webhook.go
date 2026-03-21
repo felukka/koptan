@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,9 +38,10 @@ var goapplog = logf.Log.WithName("goapp-resource")
 
 // SetupGoAppWebhookWithManager registers the webhook for GoApp in the manager.
 func SetupGoAppWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.GoApp{}).
-		WithValidator(&GoAppCustomValidator{}).
-		WithDefaulter(&GoAppCustomDefaulter{}).
+	return ctrl.NewWebhookManagedBy(mgr).
+		For(&koptanv1alpha.JavaApp{}).
+		WithValidator(&JavaAppCustomValidator{}).
+		WithDefaulter(&JavaAppCustomDefaulter{}).
 		Complete()
 }
 
@@ -57,32 +59,39 @@ type GoAppCustomDefaulter struct {
 }
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind GoApp.
-func (d *GoAppCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.GoApp) error {
-	goapplog.Info("Defaulting for GoApp", "name", obj.GetName())
+func (d *GoAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	// Type assertion to ensure that obj is a *GoApp
+	goApp, ok := obj.(*koptanv1alpha.GoApp)
+	if !ok {
+		return apierrors.NewBadRequest("expected GoApp object")
+	}
+
+	// Log the defaulting action
+	goapplog.Info("Defaulting for GoApp", "name", goApp.GetName())
 
 	// Default for GoVersion
-	if obj.Spec.GoVersion == "" {
-		obj.Spec.GoVersion = "1.26.1"
+	if goApp.Spec.GoVersion == "" {
+		goApp.Spec.GoVersion = "1.26.1"
 	}
 
 	// Default for Entrypoint
-	if obj.Spec.Entrypoint == "" {
-		obj.Spec.Entrypoint = "main.go"
+	if goApp.Spec.Entrypoint == "" {
+		goApp.Spec.Entrypoint = "main.go"
 	}
 
 	// Default for BuildArgs
-	if obj.Spec.BuildArgs == nil {
-		obj.Spec.BuildArgs = []string{} // No default build arguments
+	if goApp.Spec.BuildArgs == nil {
+		goApp.Spec.BuildArgs = []string{} // No default build arguments
 	}
 
 	// Default for ExtraPackages
-	if obj.Spec.ExtraPackages == nil {
-		obj.Spec.ExtraPackages = []string{} // No default packages
+	if goApp.Spec.ExtraPackages == nil {
+		goApp.Spec.ExtraPackages = []string{} // No default packages
 	}
 
 	// Default for Env
-	if obj.Spec.Env == nil {
-		obj.Spec.Env = map[string]string{} // Empty environment if not set
+	if goApp.Spec.Env == nil {
+		goApp.Spec.Env = map[string]string{} // Empty environment if not set
 	}
 
 	return nil
@@ -99,18 +108,45 @@ func (d *GoAppCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.GoA
 // as this struct is used only for temporary operations and does not need to be deeply copied.
 type GoAppCustomValidator struct{}
 
-func (v *GoAppCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.GoApp) (admission.Warnings, error) {
-	goapplog.Info("Validation for GoApp upon creation", "name", obj.GetName())
-	return nil, v.validateGoApp(obj)
+func (v *GoAppCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	// Type assertion to ensure that obj is a *GoApp
+	goApp, ok := obj.(*koptanv1alpha.GoApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected GoApp object")
+	}
+
+	// Log the validation action
+	goapplog.Info("Validation for GoApp upon creation", "name", goApp.GetName())
+
+	// Call the validation logic for GoApp
+	return nil, v.validateGoApp(goApp)
 }
 
-func (v *GoAppCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.GoApp) (admission.Warnings, error) {
-	goapplog.Info("Validation for GoApp upon update", "name", newObj.GetName())
-	// Calling the same validation logic for updates
-	return nil, v.validateGoApp(newObj)
+func (v *GoAppCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	// Type assertion to ensure that newObj is a *GoApp
+	newGoApp, ok := newObj.(*koptanv1alpha.GoApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected GoApp object")
+	}
+
+	// Log the validation action
+	goapplog.Info("Validation for GoApp upon update", "name", newGoApp.GetName())
+
+	// Call the same validation logic for updates
+	return nil, v.validateGoApp(newGoApp)
 }
 
-func (v *GoAppCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.GoApp) (admission.Warnings, error) {
+func (v *GoAppCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	// Type assertion to ensure that obj is a *GoApp
+	goApp, ok := obj.(*koptanv1alpha.GoApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected GoApp object")
+	}
+
+	// Log the validation action
+	goapplog.Info("Validation for GoApp upon deletion", "name", goApp.GetName())
+
+	// No specific validation required for delete
 	return nil, nil
 }
 

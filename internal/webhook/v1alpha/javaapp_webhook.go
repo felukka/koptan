@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,7 +38,8 @@ var javaapplog = logf.Log.WithName("javaapp-resource")
 
 // SetupJavaAppWebhookWithManager registers the webhook for JavaApp in the manager.
 func SetupJavaAppWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.JavaApp{}).
+	return ctrl.NewWebhookManagedBy(mgr).
+		For(&koptanv1alpha.JavaApp{}).
 		WithValidator(&JavaAppCustomValidator{}).
 		WithDefaulter(&JavaAppCustomDefaulter{}).
 		Complete()
@@ -57,27 +59,31 @@ type JavaAppCustomDefaulter struct {
 }
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind JavaApp.
-func (d *JavaAppCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.JavaApp) error {
-	javaapplog.Info("Defaulting for JavaApp", "name", obj.GetName())
+func (d *JavaAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	javaApp, ok := obj.(*koptanv1alpha.JavaApp)
+	if !ok {
+		return apierrors.NewBadRequest("expected JavaApp object")
+	}
+	javaapplog.Info("Defaulting for JavaApp", "name", javaApp.GetName())
 
-	if obj.Spec.JavaVersion == "" {
-		obj.Spec.JavaVersion = "17"
+	if javaApp.Spec.JavaVersion == "" {
+		javaApp.Spec.JavaVersion = "17"
 	}
 
-	if obj.Spec.BuildTool == "maven" && obj.Spec.MavenGoal == "" {
-		obj.Spec.MavenGoal = "package"
+	if javaApp.Spec.BuildTool == "maven" && javaApp.Spec.MavenGoal == "" {
+		javaApp.Spec.MavenGoal = "package"
 	}
 
-	if obj.Spec.BuildArgs == nil {
-		obj.Spec.BuildArgs = []string{}
+	if javaApp.Spec.BuildArgs == nil {
+		javaApp.Spec.BuildArgs = []string{}
 	}
 
-	if obj.Spec.ExtraPackages == nil {
-		obj.Spec.ExtraPackages = []string{}
+	if javaApp.Spec.ExtraPackages == nil {
+		javaApp.Spec.ExtraPackages = []string{}
 	}
 
-	if obj.Spec.Env == nil {
-		obj.Spec.Env = map[string]string{}
+	if javaApp.Spec.Env == nil {
+		javaApp.Spec.Env = map[string]string{}
 	}
 
 	return nil
@@ -97,29 +103,32 @@ type JavaAppCustomValidator struct {
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type JavaApp.
-func (v *JavaAppCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.JavaApp) (admission.Warnings, error) {
-	javaapplog.Info("Validation for JavaApp upon creation", "name", obj.GetName())
-
-	// TODO(user): fill in your validation logic upon object creation.
-
-	return nil, v.validateJavaApp(obj)
+func (v *JavaAppCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	javaApp, ok := obj.(*koptanv1alpha.JavaApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected JavaApp object")
+	}
+	javaapplog.Info("Validation for JavaApp upon creation", "name", javaApp.GetName())
+	return nil, v.validateJavaApp(javaApp)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type JavaApp.
-func (v *JavaAppCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.JavaApp) (admission.Warnings, error) {
-	javaapplog.Info("Validation for JavaApp upon update", "name", newObj.GetName())
-
-	// TODO(user): fill in your validation logic upon object update.
-
-	return nil, v.validateJavaApp(newObj)
+func (v *JavaAppCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	newJavaApp, ok := newObj.(*koptanv1alpha.JavaApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected JavaApp object")
+	}
+	javaapplog.Info("Validation for JavaApp upon update", "name", newJavaApp.GetName())
+	return nil, v.validateJavaApp(newJavaApp)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type JavaApp.
-func (v *JavaAppCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.JavaApp) (admission.Warnings, error) {
-	javaapplog.Info("Validation for JavaApp upon deletion", "name", obj.GetName())
-
-	// TODO(user): fill in your validation logic upon object deletion.
-
+func (v *JavaAppCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	javaApp, ok := obj.(*koptanv1alpha.JavaApp)
+	if !ok {
+		return nil, apierrors.NewBadRequest("expected JavaApp object")
+	}
+	javaapplog.Info("Validation for JavaApp upon deletion", "name", javaApp.GetName())
 	return nil, nil
 }
 
