@@ -18,6 +18,7 @@ import (
 
 	v1alpha "github.com/felukka/koptan/api/v1alpha"
 	"github.com/felukka/koptan/internal/controller"
+	webhookv1alpha "github.com/felukka/koptan/internal/webhook/v1alpha"
 )
 
 var (
@@ -118,6 +119,27 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Voyage")
+		os.Exit(1)
+	}
+
+	if err := webhookv1alpha.SetupGoAppWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "GoApp")
+		os.Exit(1)
+	}
+	if err := webhookv1alpha.SetupDotnetAppWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "DotnetApp")
+		os.Exit(1)
+	}
+	if err := webhookv1alpha.SetupJavaAppWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "JavaApp")
+		os.Exit(1)
+	}
+	if err := webhookv1alpha.SetupSlipwayWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "Slipway")
+		os.Exit(1)
+	}
+	if err := webhookv1alpha.SetupVoyageWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "Voyage")
 		os.Exit(1)
 	}
 

@@ -23,9 +23,9 @@ var dotnetAppLog = logf.Log.WithName("dotnetapp-resource")
 // SetupDotnetAppWebhookWithManager registers the webhook for DotnetApp in the manager.
 func SetupDotnetAppWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&koptanv1alpha.JavaApp{}).
-		WithValidator(&JavaAppCustomValidator{}).
-		WithDefaulter(&JavaAppCustomDefaulter{}).
+		For(&koptanv1alpha.DotnetApp{}).
+		WithValidator(&DotnetAppCustomValidator{}).
+		WithDefaulter(&DotnetAppCustomDefaulter{}).
 		Complete()
 }
 

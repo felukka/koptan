@@ -38,9 +38,9 @@ var slipwaylog = logf.Log.WithName("slipway-resource")
 // SetupSlipwayWebhookWithManager registers the webhook for Slipway in the manager.
 func SetupSlipwayWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&koptanv1alpha.JavaApp{}).
-		WithValidator(&JavaAppCustomValidator{}).
-		WithDefaulter(&JavaAppCustomDefaulter{}).
+		For(&koptanv1alpha.Slipway{}).
+		WithValidator(&SlipwayCustomValidator{}).
+		WithDefaulter(&SlipwayCustomDefaulter{}).
 		Complete()
 }
 
