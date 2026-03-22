@@ -6,6 +6,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	VoyagePhaseWaiting   VoyagePhase = "Waiting"
+	VoyagePhaseDeploying VoyagePhase = "Deploying"
+	VoyagePhaseRunning   VoyagePhase = "Running"
+	VoyagePhaseFailed    VoyagePhase = "Failed"
+)
+
 type Resources struct {
 	// +optional
 	CPURequest *resource.Quantity `json:"cpuRequest,omitempty"`
@@ -25,6 +32,7 @@ func (r *Resources) ToK8s() corev1.ResourceRequirements {
 	if r == nil {
 		return reqs
 	}
+
 	if r.CPURequest != nil || r.MemoryRequest != nil {
 		reqs.Requests = corev1.ResourceList{}
 		if r.CPURequest != nil {
@@ -43,6 +51,7 @@ func (r *Resources) ToK8s() corev1.ResourceRequirements {
 			reqs.Limits[corev1.ResourceMemory] = *r.MemoryLimit
 		}
 	}
+
 	return reqs
 }
 
@@ -88,13 +97,6 @@ type SlipwayRef struct {
 }
 
 type VoyagePhase string
-
-const (
-	VoyagePhaseWaiting   VoyagePhase = "Waiting"
-	VoyagePhaseDeploying VoyagePhase = "Deploying"
-	VoyagePhaseRunning   VoyagePhase = "Running"
-	VoyagePhaseFailed    VoyagePhase = "Failed"
-)
 
 type VoyageStatus struct {
 	Phase         VoyagePhase        `json:"phase,omitempty"`
