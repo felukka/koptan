@@ -60,37 +60,73 @@ func (r *VoyageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	var sw koptan.Slipway
-	if err := r.Get(ctx, types.NamespacedName{Name: voyage.Spec.SlipwayRef.Name, Namespace: voyage.Namespace}, &sw); err != nil {
+	if err := r.Get(
+		ctx,
+		types.NamespacedName{
+			Name:      voyage.Spec.SlipwayRef.Name,
+			Namespace: voyage.Namespace,
+		},
+		&sw,
+	); err != nil {
 		log.Error(err, "slipway not found", "slipway", voyage.Spec.SlipwayRef.Name)
-		r.setVoyageStatus(ctx, &voyage, koptan.VoyagePhaseWaiting, "", "slipway not found")
+		r.setVoyageStatus(
+			ctx,
+			&voyage,
+			koptan.VoyagePhaseWaiting,
+			koptan.Slipway{},
+			"slipway not found",
+		)
+
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
 	if sw.Status.Phase != koptan.SlipwayPhaseSucceeded || sw.Status.LatestImage == "" {
 		log.Info("slipway not ready", "phase", sw.Status.Phase)
-		r.setVoyageStatus(ctx, &voyage, koptan.VoyagePhaseWaiting, "", fmt.Sprintf("waiting for slipway (phase: %s)", sw.Status.Phase))
+		r.setVoyageStatus(
+			ctx,
+			&voyage,
+			koptan.VoyagePhaseWaiting,
+			sw,
+			fmt.Sprintf("waiting for slipway (phase: %s)", sw.Status.Phase),
+		)
+
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
-	image := sw.Status.LatestImage
-
-	if err := r.reconcileDeployment(ctx, &voyage, image); err != nil {
+	if err := r.reconcileDeployment(ctx, &voyage, &sw); err != nil {
 		log.Error(err, "failed to reconcile deployment")
-		r.setVoyageStatus(ctx, &voyage, koptan.VoyagePhaseFailed, image, fmt.Sprintf("deployment failed: %v", err))
+		r.setVoyageStatus(
+			ctx,
+			&voyage,
+			koptan.VoyagePhaseFailed,
+			sw,
+			fmt.Sprintf("deployment failed: %v", err),
+		)
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
 	if err := r.reconcileService(ctx, &voyage); err != nil {
 		log.Error(err, "failed to reconcile service")
-		r.setVoyageStatus(ctx, &voyage, koptan.VoyagePhaseFailed, image, fmt.Sprintf("service failed: %v", err))
+		r.setVoyageStatus(
+			ctx,
+			&voyage,
+			koptan.VoyagePhaseFailed,
+			sw,
+			fmt.Sprintf("service failed: %v", err),
+		)
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
-	r.setVoyageStatus(ctx, &voyage, koptan.VoyagePhaseRunning, image, "")
+	r.setVoyageStatus(ctx, &voyage, koptan.VoyagePhaseRunning, sw, "")
+
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-func (r *VoyageReconciler) reconcileDeployment(ctx context.Context, voyage *koptan.Voyage, image string) error {
+func (r *VoyageReconciler) reconcileDeployment(
+	ctx context.Context,
+	voyage *koptan.Voyage,
+	slipway *koptan.Slipway,
+) error {
 	labels := map[string]string{
 		"felukka.org/voyage":    voyage.Name,
 		"felukka.org/component": "app",
@@ -103,7 +139,7 @@ func (r *VoyageReconciler) reconcileDeployment(ctx context.Context, voyage *kopt
 
 	container := corev1.Container{
 		Name:  voyage.Name,
-		Image: image,
+		Image: slipway.Status.LatestImage,
 		Ports: []corev1.ContainerPort{
 			{
 				ContainerPort: voyage.Spec.Port,
@@ -166,6 +202,17 @@ func (r *VoyageReconciler) reconcileDeployment(ctx context.Context, voyage *kopt
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					ImagePullSecrets: func() []corev1.LocalObjectReference {
+						if slipway.Spec.Image.Creds == nil {
+							return nil
+						}
+
+						return []corev1.LocalObjectReference{
+							{
+								Name: slipway.Name + "-registry-auth",
+							},
+						}
+					}(),
 					Containers: []corev1.Container{container},
 				},
 			},
@@ -177,7 +224,11 @@ func (r *VoyageReconciler) reconcileDeployment(ctx context.Context, voyage *kopt
 	}
 
 	var existing appsv1.Deployment
-	err := r.Get(ctx, types.NamespacedName{Name: voyage.Name, Namespace: voyage.Namespace}, &existing)
+	err := r.Get(
+		ctx,
+		types.NamespacedName{Name: voyage.Name, Namespace: voyage.Namespace},
+		&existing,
+	)
 
 	if errors.IsNotFound(err) {
 		return r.Create(ctx, desired)
@@ -220,7 +271,11 @@ func (r *VoyageReconciler) reconcileService(ctx context.Context, voyage *koptan.
 	}
 
 	var existing corev1.Service
-	err := r.Get(ctx, types.NamespacedName{Name: voyage.Name, Namespace: voyage.Namespace}, &existing)
+	err := r.Get(
+		ctx,
+		types.NamespacedName{Name: voyage.Name, Namespace: voyage.Namespace},
+		&existing,
+	)
 
 	if errors.IsNotFound(err) {
 		return r.Create(ctx, desired)
@@ -234,9 +289,15 @@ func (r *VoyageReconciler) reconcileService(ctx context.Context, voyage *koptan.
 	return r.Update(ctx, &existing)
 }
 
-func (r *VoyageReconciler) setVoyageStatus(ctx context.Context, voyage *koptan.Voyage, phase koptan.VoyagePhase, image, msg string) {
+func (r *VoyageReconciler) setVoyageStatus(
+	ctx context.Context,
+	voyage *koptan.Voyage,
+	phase koptan.VoyagePhase,
+	sw koptan.Slipway,
+	msg string,
+) {
 	voyage.Status.Phase = phase
-	voyage.Status.DeployedImage = image
+	voyage.Status.DeployedImage = sw.Status.LatestImage
 
 	if msg != "" {
 		meta.SetStatusCondition(&voyage.Status.Conditions, metav1.Condition{
@@ -250,7 +311,7 @@ func (r *VoyageReconciler) setVoyageStatus(ctx context.Context, voyage *koptan.V
 			Type:    "Ready",
 			Status:  metav1.ConditionTrue,
 			Reason:  "Running",
-			Message: fmt.Sprintf("deployed image %s", image),
+			Message: fmt.Sprintf("deployed image %s", sw.Status.LatestImage),
 		})
 	}
 
