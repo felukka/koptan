@@ -37,9 +37,9 @@ var voyagelog = logf.Log.WithName("voyage-resource")
 // SetupVoyageWebhookWithManager registers the webhook for Voyage in the manager.
 func SetupVoyageWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&koptanv1alpha.JavaApp{}).
-		WithValidator(&JavaAppCustomValidator{}).
-		WithDefaulter(&JavaAppCustomDefaulter{}).
+		For(&koptanv1alpha.Voyage{}).
+		WithValidator(&VoyageCustomValidator{}).
+		WithDefaulter(&VoyageCustomDefaulter{}).
 		Complete()
 }
 

@@ -39,9 +39,9 @@ var goapplog = logf.Log.WithName("goapp-resource")
 // SetupGoAppWebhookWithManager registers the webhook for GoApp in the manager.
 func SetupGoAppWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&koptanv1alpha.JavaApp{}).
-		WithValidator(&JavaAppCustomValidator{}).
-		WithDefaulter(&JavaAppCustomDefaulter{}).
+		For(&koptanv1alpha.GoApp{}).
+		WithValidator(&GoAppCustomValidator{}).
+		WithDefaulter(&GoAppCustomDefaulter{}).
 		Complete()
 }
 
