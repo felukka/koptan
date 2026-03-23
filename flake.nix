@@ -63,8 +63,12 @@
               gcc
               gnumake
               go
-              go-tools
+              gofumpt
+              goimports-reviser
+              golangci-lint
+              golines
               gopls
+              go-tools
               gotools
               kubebuilder
               (python3.withPackages (
