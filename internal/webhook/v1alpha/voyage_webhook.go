@@ -109,10 +109,6 @@ func (v *VoyageCustomValidator) validateVoyage(obj *koptanv1alpha.Voyage) error 
 		allErrs = append(allErrs, field.Invalid(specPath.Child("port"), obj.Spec.Port, "Port must be between 1 and 65535"))
 	}
 
-	if obj.Spec.HealthCheck != nil && obj.Spec.HealthCheck.Path == "" {
-		allErrs = append(allErrs, field.Invalid(specPath.Child("healthCheck").Child("path"), obj.Spec.HealthCheck.Path, "HealthCheck path cannot be empty"))
-	}
-
 	if obj.Spec.Resources != nil {
 		if obj.Spec.Resources.CPURequest != nil && obj.Spec.Resources.CPURequest.Sign() <= 0 {
 			allErrs = append(allErrs, field.Invalid(specPath.Child("resources").Child("cpuRequest"), obj.Spec.Resources.CPURequest, "CPURequest must be positive"))
@@ -125,9 +121,9 @@ func (v *VoyageCustomValidator) validateVoyage(obj *koptanv1alpha.Voyage) error 
 
 	if obj.Spec.Env != nil {
 		envPath := specPath.Child("env")
-		for _, envVar := range obj.Spec.Env {
+		for i, envVar := range obj.Spec.Env {
 			if envVar.Name == "" {
-				allErrs = append(allErrs, field.Invalid(envPath, envVar.Name, "Environment variable names cannot be empty"))
+				allErrs = append(allErrs, field.Required(envPath.Index(i).Child("name"), "Environment variable name is required"))
 			}
 		}
 	}

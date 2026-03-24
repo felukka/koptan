@@ -84,6 +84,26 @@ webhooks:
     resources:
     - voyages
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-koptan-felukka-sh-v1alpha-dotnetapp
+  failurePolicy: Fail
+  name: mdotnetapp-v1alpha.kb.io
+  rules:
+  - apiGroups:
+    - koptan.felukka.sh
+    apiVersions:
+    - v1alpha
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - dotnetapps
+  sideEffects: None
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -169,4 +189,24 @@ webhooks:
     - UPDATE
     resources:
     - voyages
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-koptan-felukka-sh-v1alpha-dotnetapp
+  failurePolicy: Fail
+  name: vdotnetapp-v1alpha.kb.io
+  rules:
+  - apiGroups:
+    - koptan.felukka.sh
+    apiVersions:
+    - v1alpha
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - dotnetapps
   sideEffects: None

@@ -69,7 +69,7 @@ resources:
   controller: true
   domain: felukka.sh
   group: koptan
-  kind: Slipway   
+  kind: Slipway
   path: github.com/felukka/koptan/api/v1alpha
   version: v1alpha
   webhooks:

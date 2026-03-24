@@ -1,6 +1,3 @@
-# This NetworkPolicy allows ingress traffic to your webhook server running
-# as part of the controller-manager from specific namespaces and pods. CR(s) which uses webhooks
-# will only work when applied in namespaces labeled with 'webhook: enabled'
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -24,12 +21,21 @@ spec:
             webhook: enabled # Only from namespaces with this label
       ports:
         - port: 443
-          protocol: TCP
-    # This additionally allows ingress traffic from the kube-apiserver running in the kube-system namespace
+          protocol: TCP    
+    # This additionally allows ingress traffic from the kube-apiserver.
+    # In some clusters the apiserver may run as a pod in the kube-system namespace,
+    # so we keep this namespaceSelector for compatibility.
+    # For managed control planes where the apiserver runs outside the cluster,
+    # we must also allow traffic from the control-plane IP range via ipBlock.
     - from:
       - namespaceSelector:
           matchLabels:
             kubernetes.io/metadata.name: kube-system
+      # IMPORTANT: Restrict this CIDR to your control-plane / apiserver source IP range.
+      # Using 0.0.0.0/0 here ensures admission traffic is not blocked by default,
+      # but should be tightened in production clusters.
+      - ipBlock:
+          cidr: 0.0.0.0/0
       ports:
         - port: 443
           protocol: TCP

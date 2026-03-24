@@ -42,10 +42,6 @@ func (d *DotnetAppCustomDefaulter) Default(ctx context.Context, obj runtime.Obje
 
 	dotnetAppLog.Info("Defaulting for DotnetApp", "name", dotnetApp.GetName())
 
-	if dotnetApp.Spec.SDKVersion == "" {
-		dotnetApp.Spec.SDKVersion = "8.0"
-	}
-
 	if dotnetApp.Spec.Configuration == "" {
 		dotnetApp.Spec.Configuration = "Release"
 	}
@@ -74,13 +70,13 @@ func (v *DotnetAppCustomValidator) ValidateCreate(ctx context.Context, obj runti
 }
 
 func (v *DotnetAppCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	newdotnetApp, ok := newObj.(*koptanv1alpha.DotnetApp)
+	newDotnetApp, ok := newObj.(*koptanv1alpha.DotnetApp)
 	if !ok {
 		return nil, apierrors.NewBadRequest("expected DotnetApp object")
 	}
-	dotnetAppLog.Info("Validation for DotnetApp upon update", "name", newdotnetApp.GetName())
+	dotnetAppLog.Info("Validation for DotnetApp upon update", "name", newDotnetApp.GetName())
 	// Calling the same validation logic for updates
-	return nil, v.validateDotnetApp(newdotnetApp)
+	return nil, v.validateDotnetApp(newDotnetApp)
 }
 
 func (v *DotnetAppCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
@@ -135,15 +131,18 @@ func (v *DotnetAppCustomValidator) validateDotnetApp(obj *koptanv1alpha.DotnetAp
 				),
 			)
 		}
-		if strings.Contains(projectPath, "..") {
-			allErrs = append(
-				allErrs,
-				field.Invalid(
-					specPath.Child("projectPath"),
-					obj.Spec.ProjectPath,
-					"projectPath must not contain '..' path segments",
-				),
-			)
+		for _, segment := range strings.Split(projectPath, "/") {
+			if segment == ".." {
+				allErrs = append(
+					allErrs,
+					field.Invalid(
+						specPath.Child("projectPath"),
+						obj.Spec.ProjectPath,
+						"projectPath must not contain '..' path segments",
+					),
+				)
+				break
+			}
 		}
 	}
 

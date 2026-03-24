@@ -46,10 +46,6 @@ func (d *JavaAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object
 	}
 	javaapplog.Info("Defaulting for JavaApp", "name", javaApp.GetName())
 
-	if javaApp.Spec.JavaVersion == "" {
-		javaApp.Spec.JavaVersion = "17"
-	}
-
 	if javaApp.Spec.BuildTool == BuildToolMaven && javaApp.Spec.MavenGoal == "" {
 		javaApp.Spec.MavenGoal = "package"
 	}
@@ -114,9 +110,6 @@ func (v *JavaAppCustomValidator) validateJavaApp(obj *koptanv1alpha.JavaApp) err
 		if !strings.HasPrefix(obj.Spec.Source.Repo, "https://") {
 			allErrs = append(allErrs, field.Invalid(sourcePath.Child("repo"), obj.Spec.Source.Repo, "URL must use https:// protocol"))
 		}
-		if !strings.Contains(obj.Spec.Source.Repo, "@") {
-			allErrs = append(allErrs, field.Invalid(sourcePath.Child("repo"), obj.Spec.Source.Repo, "URL must contain an '@' symbol"))
-		}
 	}
 
 	version := strings.TrimSpace(obj.Spec.JavaVersion)
@@ -169,7 +162,7 @@ func (v *JavaAppCustomValidator) validateJavaApp(obj *koptanv1alpha.JavaApp) err
 			allErrs = append(allErrs, field.Invalid(
 				specPath.Child("gradleTask"),
 				obj.Spec.GradleTask,
-				"gradleTask should not be set when using maven",
+				"gradleTask must be empty or 'build' when using maven",
 			))
 		}
 	}
@@ -179,7 +172,7 @@ func (v *JavaAppCustomValidator) validateJavaApp(obj *koptanv1alpha.JavaApp) err
 			allErrs = append(allErrs, field.Invalid(
 				specPath.Child("mavenGoal"),
 				obj.Spec.MavenGoal,
-				"mavenGoal should not be set when using gradle",
+				"mavenGoal must be empty or \"package\" when using gradle",
 			))
 		}
 	}

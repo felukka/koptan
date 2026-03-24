@@ -44,14 +44,8 @@ func (d *GoAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object) 
 	// Log the defaulting action
 	goapplog.Info("Defaulting for GoApp", "name", goApp.GetName())
 
-	// Default for GoVersion
-	if goApp.Spec.GoVersion == "" {
-		goApp.Spec.GoVersion = "1.26.1"
-	}
-
 	// Default for Entrypoint
 	if goApp.Spec.Entrypoint == "" {
-		goApp.Spec.Entrypoint = "main.go"
 	}
 
 	// Default for BuildArgs
@@ -127,9 +121,6 @@ func (v *GoAppCustomValidator) validateGoApp(obj *koptanv1alpha.GoApp) error {
 	} else {
 		if !strings.HasPrefix(obj.Spec.Source.Repo, "https://") {
 			allErrs = append(allErrs, field.Invalid(sourcePath.Child("repo"), obj.Spec.Source.Repo, "URL must use https:// protocol"))
-		}
-		if !strings.Contains(obj.Spec.Source.Repo, "@") {
-			allErrs = append(allErrs, field.Invalid(sourcePath.Child("repo"), obj.Spec.Source.Repo, "URL must contain an '@' symbol"))
 		}
 	}
 
