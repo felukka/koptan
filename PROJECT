@@ -20,6 +20,10 @@ resources:
   kind: Voyage
   path: github.com/felukka/koptan/api/v1alpha
   version: v1alpha
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -29,6 +33,10 @@ resources:
   kind: GoApp
   path: github.com/felukka/koptan/api/v1alpha
   version: v1alpha
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -38,6 +46,10 @@ resources:
   kind: DotnetApp
   path: github.com/felukka/koptan/api/v1alpha
   version: v1alpha
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -47,4 +59,22 @@ resources:
   kind: JavaApp
   path: github.com/felukka/koptan/api/v1alpha
   version: v1alpha
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: felukka.sh
+  group: koptan
+  kind: Slipway
+  path: github.com/felukka/koptan/api/v1alpha
+  version: v1alpha
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 version: "3"
+
