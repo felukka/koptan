@@ -23,9 +23,9 @@ var dotnetAppLog = logf.Log.WithName("dotnetapp-resource")
 // SetupDotnetAppWebhookWithManager registers the webhook for DotnetApp in the manager.
 func SetupDotnetAppWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&koptanv1alpha.JavaApp{}).
-		WithValidator(&JavaAppCustomValidator{}).
-		WithDefaulter(&JavaAppCustomDefaulter{}).
+		For(&koptanv1alpha.DotnetApp{}).
+		WithValidator(&DotnetAppCustomValidator{}).
+		WithDefaulter(&DotnetAppCustomDefaulter{}).
 		Complete()
 }
 
@@ -98,13 +98,13 @@ func (v *DotnetAppCustomValidator) validateDotnetApp(obj *koptanv1alpha.DotnetAp
 
 	sourcePath := specPath.Child("source")
 	if obj.Spec.Source.Repo == "" {
-		allErrs = append(allErrs, field.Required(sourcePath.Child("url"), "source URL is required"))
+		allErrs = append(allErrs, field.Required(sourcePath.Child("repo"), "source repo is required"))
 	} else {
 		if !strings.HasPrefix(obj.Spec.Source.Repo, "https://") {
-			allErrs = append(allErrs, field.Invalid(sourcePath.Child("url"), obj.Spec.Source.Repo, "URL must use https:// protocol"))
+			allErrs = append(allErrs, field.Invalid(sourcePath.Child("repo"), obj.Spec.Source.Repo, "URL must use https:// protocol"))
 		}
 		if !strings.Contains(obj.Spec.Source.Repo, "@") {
-			allErrs = append(allErrs, field.Invalid(sourcePath.Child("url"), obj.Spec.Source.Repo, "URL must contain an '@' symbol"))
+			allErrs = append(allErrs, field.Invalid(sourcePath.Child("repo"), obj.Spec.Source.Repo, "URL must contain an '@' symbol"))
 		}
 	}
 
@@ -123,9 +123,27 @@ func (v *DotnetAppCustomValidator) validateDotnetApp(obj *koptanv1alpha.DotnetAp
 
 	// Validate ProjectPath
 	if obj.Spec.ProjectPath != "" {
-		// Optionally validate the path format (e.g., it should be a relative path or within a directory)
-		if !strings.HasPrefix(obj.Spec.ProjectPath, "/") {
-			allErrs = append(allErrs, field.Invalid(specPath.Child("projectPath"), obj.Spec.ProjectPath, "ProjectPath must be an absolute path"))
+		// Validate that the path is repo-relative and does not escape the repo
+		projectPath := strings.TrimSpace(obj.Spec.ProjectPath)
+		if strings.HasPrefix(projectPath, "/") {
+			allErrs = append(
+				allErrs,
+				field.Invalid(
+					specPath.Child("projectPath"),
+					obj.Spec.ProjectPath,
+					"projectPath must be a repo-relative path and must not start with '/'",
+				),
+			)
+		}
+		if strings.Contains(projectPath, "..") {
+			allErrs = append(
+				allErrs,
+				field.Invalid(
+					specPath.Child("projectPath"),
+					obj.Spec.ProjectPath,
+					"projectPath must not contain '..' path segments",
+				),
+			)
 		}
 	}
 

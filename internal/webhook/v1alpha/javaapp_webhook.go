@@ -1,19 +1,3 @@
-/*
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package v1alpha
 
 import (
@@ -32,6 +16,11 @@ import (
 	koptanv1alpha "github.com/felukka/koptan/api/v1alpha"
 )
 
+const (
+	BuildToolMaven  = "maven"
+	BuildToolGradle = "gradle"
+)
+
 // nolint:unused
 // log is for logging in this package.
 var javaapplog = logf.Log.WithName("javaapp-resource")
@@ -45,15 +34,6 @@ func SetupJavaAppWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-
-// +kubebuilder:webhook:path=/mutate-koptan-felukka-sh-v1alpha-javaapp,mutating=true,failurePolicy=fail,sideEffects=None,groups=koptan.felukka.sh,resources=javaapps,verbs=create;update,versions=v1alpha,name=mjavaapp-v1alpha.kb.io,admissionReviewVersions=v1
-
-// JavaAppCustomDefaulter struct is responsible for setting default values on the custom resource of the
-// Kind JavaApp when those are created or updated.
-//
-// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
-// as it is used only for temporary operations and does not need to be deeply copied.
 type JavaAppCustomDefaulter struct {
 	// TODO(user): Add more fields as needed for defaulting
 }
@@ -70,7 +50,7 @@ func (d *JavaAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object
 		javaApp.Spec.JavaVersion = "17"
 	}
 
-	if javaApp.Spec.BuildTool == "maven" && javaApp.Spec.MavenGoal == "" {
+	if javaApp.Spec.BuildTool == BuildToolMaven && javaApp.Spec.MavenGoal == "" {
 		javaApp.Spec.MavenGoal = "package"
 	}
 
@@ -89,15 +69,6 @@ func (d *JavaAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object
 	return nil
 }
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-// NOTE: If you want to customise the 'path', use the flags '--defaulting-path' or '--validation-path'.
-// +kubebuilder:webhook:path=/validate-koptan-felukka-sh-v1alpha-javaapp,mutating=false,failurePolicy=fail,sideEffects=None,groups=koptan.felukka.sh,resources=javaapps,verbs=create;update,versions=v1alpha,name=vjavaapp-v1alpha.kb.io,admissionReviewVersions=v1
-
-// JavaAppCustomValidator struct is responsible for validating the JavaApp resource
-// when it is created, updated, or deleted.
-//
-// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
-// as this struct is used only for temporary operations and does not need to be deeply copied.
 type JavaAppCustomValidator struct {
 	// TODO(user): Add more fields as needed for validation
 }
@@ -138,13 +109,13 @@ func (v *JavaAppCustomValidator) validateJavaApp(obj *koptanv1alpha.JavaApp) err
 
 	sourcePath := specPath.Child("source")
 	if obj.Spec.Source.Repo == "" {
-		allErrs = append(allErrs, field.Required(sourcePath.Child("url"), "source URL is required"))
+		allErrs = append(allErrs, field.Required(sourcePath.Child("repo"), "source repo is required"))
 	} else {
 		if !strings.HasPrefix(obj.Spec.Source.Repo, "https://") {
-			allErrs = append(allErrs, field.Invalid(sourcePath.Child("url"), obj.Spec.Source.Repo, "URL must use https:// protocol"))
+			allErrs = append(allErrs, field.Invalid(sourcePath.Child("repo"), obj.Spec.Source.Repo, "URL must use https:// protocol"))
 		}
 		if !strings.Contains(obj.Spec.Source.Repo, "@") {
-			allErrs = append(allErrs, field.Invalid(sourcePath.Child("url"), obj.Spec.Source.Repo, "URL must contain an '@' symbol"))
+			allErrs = append(allErrs, field.Invalid(sourcePath.Child("repo"), obj.Spec.Source.Repo, "URL must contain an '@' symbol"))
 		}
 	}
 
@@ -160,8 +131,8 @@ func (v *JavaAppCustomValidator) validateJavaApp(obj *koptanv1alpha.JavaApp) err
 	}
 
 	if obj.Spec.BuildTool != "" &&
-		obj.Spec.BuildTool != "maven" &&
-		obj.Spec.BuildTool != "gradle" {
+		obj.Spec.BuildTool != BuildToolMaven &&
+		obj.Spec.BuildTool != BuildToolGradle {
 
 		allErrs = append(allErrs, field.Invalid(
 			specPath.Child("buildTool"),
@@ -171,16 +142,29 @@ func (v *JavaAppCustomValidator) validateJavaApp(obj *koptanv1alpha.JavaApp) err
 	}
 
 	if obj.Spec.ArtifactPath != "" {
-		if !strings.HasPrefix(obj.Spec.ArtifactPath, "/") {
+		artifactPath := strings.TrimSpace(obj.Spec.ArtifactPath)
+		if strings.HasPrefix(artifactPath, "/") {
 			allErrs = append(allErrs, field.Invalid(
 				specPath.Child("artifactPath"),
 				obj.Spec.ArtifactPath,
-				"artifactPath must be an absolute path",
+				"artifactPath must be relative to the repository root and must not start with '/'",
 			))
+		} else {
+			pathSegments := strings.Split(artifactPath, "/")
+			for _, segment := range pathSegments {
+				if segment == ".." {
+					allErrs = append(allErrs, field.Invalid(
+						specPath.Child("artifactPath"),
+						obj.Spec.ArtifactPath,
+						"artifactPath must not contain '..' path traversal",
+					))
+					break
+				}
+			}
 		}
 	}
 
-	if obj.Spec.BuildTool == "maven" {
+	if obj.Spec.BuildTool == BuildToolMaven {
 		if obj.Spec.GradleTask != "" && obj.Spec.GradleTask != "build" {
 			allErrs = append(allErrs, field.Invalid(
 				specPath.Child("gradleTask"),
@@ -190,7 +174,7 @@ func (v *JavaAppCustomValidator) validateJavaApp(obj *koptanv1alpha.JavaApp) err
 		}
 	}
 
-	if obj.Spec.BuildTool == "gradle" {
+	if obj.Spec.BuildTool == BuildToolGradle {
 		if obj.Spec.MavenGoal != "" && obj.Spec.MavenGoal != "package" {
 			allErrs = append(allErrs, field.Invalid(
 				specPath.Child("mavenGoal"),

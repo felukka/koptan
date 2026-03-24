@@ -1,19 +1,3 @@
-/*
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package v1alpha
 
 import (
@@ -38,21 +22,12 @@ var slipwaylog = logf.Log.WithName("slipway-resource")
 // SetupSlipwayWebhookWithManager registers the webhook for Slipway in the manager.
 func SetupSlipwayWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&koptanv1alpha.JavaApp{}).
-		WithValidator(&JavaAppCustomValidator{}).
-		WithDefaulter(&JavaAppCustomDefaulter{}).
+		For(&koptanv1alpha.Slipway{}).
+		WithValidator(&SlipwayCustomValidator{}).
+		WithDefaulter(&SlipwayCustomDefaulter{}).
 		Complete()
 }
 
-// TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-
-// +kubebuilder:webhook:path=/mutate-koptan-felukka-sh-v1alpha-slipway,mutating=true,failurePolicy=fail,sideEffects=None,groups=koptan.felukka.sh,resources=slipways,verbs=create;update,versions=v1alpha,name=mslipway-v1alpha.kb.io,admissionReviewVersions=v1
-
-// SlipwayCustomDefaulter struct is responsible for setting default values on the custom resource of the
-// Kind Slipway when those are created or updated.
-//
-// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
-// as it is used only for temporary operations and does not need to be deeply copied.
 type SlipwayCustomDefaulter struct {
 	// TODO(user): Add more fields as needed for defaulting
 }
@@ -81,15 +56,6 @@ func (d *SlipwayCustomDefaulter) Default(ctx context.Context, obj runtime.Object
 	return nil
 }
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-// NOTE: If you want to customise the 'path', use the flags '--defaulting-path' or '--validation-path'.
-// +kubebuilder:webhook:path=/validate-koptan-felukka-sh-v1alpha-slipway,mutating=false,failurePolicy=fail,sideEffects=None,groups=koptan.felukka.sh,resources=slipways,verbs=create;update,versions=v1alpha,name=vslipway-v1alpha.kb.io,admissionReviewVersions=v1
-
-// SlipwayCustomValidator struct is responsible for validating the Slipway resource
-// when it is created, updated, or deleted.
-//
-// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
-// as this struct is used only for temporary operations and does not need to be deeply copied.
 type SlipwayCustomValidator struct {
 	// TODO(user): Add more fields as needed for validation
 }
