@@ -44,10 +44,6 @@ func (d *GoAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object) 
 	// Log the defaulting action
 	goapplog.Info("Defaulting for GoApp", "name", goApp.GetName())
 
-	// Default for Entrypoint
-	if goApp.Spec.Entrypoint == "" {
-	}
-
 	// Default for BuildArgs
 	if goApp.Spec.BuildArgs == nil {
 		goApp.Spec.BuildArgs = []string{} // No default build arguments
