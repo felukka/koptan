@@ -1,12 +1,13 @@
----
 site_name: Koptan's Documentation
+site_description: Documentation for Koptan, a Kubernetes operator for managing application builds and deployments
 repo_url: https://github.com/felukka/koptan
+repo_name: felukka/koptan
 site_url: https://koptan.felukka.org
+
 theme:
   name: material
   icon:
     repo: fontawesome/brands/git-alt
-  # TODO: Replace with real logos
   logo: assets/koptan.png
   favicon: assets/koptan.png
   font:
@@ -14,40 +15,73 @@ theme:
     code: JetBrains Mono
   features:
     - navigation.footer
-    - search.highlight
     - navigation.tabs
     - navigation.top
     - navigation.expand
+    - navigation.sections
+    - navigation.indexes
+    - search.highlight
+    - search.suggest
+    - content.code.copy
     - content.tabs.link
+    - toc.follow
   palette:
     - scheme: default
       primary: custom
       toggle:
         icon: material/weather-sunny
-        name: Dark mode
+        name: Switch to dark mode
     - scheme: slate
       primary: custom
       toggle:
         icon: material/weather-night
-        name: Light mode
+        name: Switch to light mode
+
 markdown_extensions:
   - attr_list
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
       pygments_lang_class: true
-  - pymdownx.inlinehilite
-  - pymdownx.snippets
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
-  - pymdownx.tabbed:
-      alternate_style: true
-  - admonition
-  - pymdownx.details
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Overview: overview.md
+
+  - Concepts:
+      - Overview: concepts/index.md
+      - Apps: concepts/apps.md
+      - Slipway: concepts/slipway.md
+      - Voyage: concepts/voyage.md
+
+  - Getting Started:
+      - Overview: getting-started/index.md
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+
+  - Examples:
+      - Overview: examples/index.md
+      - App Example: examples/app.md
+      - Slipway Example: examples/slipway.md
+      - Voyage Example: examples/voyage.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/felukka/koptan
+
 copyright: Copyright &copy; 2026 Felukka.org
