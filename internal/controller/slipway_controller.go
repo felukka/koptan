@@ -435,9 +435,9 @@ func simplifyPodStatus(pod *corev1.Pod) (koptan.SlipwayPhase, string, bool) {
 		return koptan.SlipwayPhaseFailed, msg, true
 	}
 
-	msg := "pod pending"
+	msg := "pending"
 	if pod.Status.Phase == corev1.PodRunning {
-		msg = "pod running"
+		msg = "running"
 	}
 	for _, c := range pod.Status.ContainerStatuses {
 		if c.State.Waiting != nil {
