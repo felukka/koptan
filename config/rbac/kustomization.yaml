@@ -29,13 +29,13 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the koptan itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- javaapp_admin_role.yaml
-- javaapp_editor_role.yaml
-- javaapp_viewer_role.yaml
-- dotnetapp_admin_role.yaml
-- dotnetapp_editor_role.yaml
-- dotnetapp_viewer_role.yaml
-- goapp_admin_role.yaml
-- goapp_editor_role.yaml
-- goapp_viewer_role.yaml
+  - javaapp_admin_role.yaml
+  - javaapp_editor_role.yaml
+  - javaapp_viewer_role.yaml
+  - dotnetapp_admin_role.yaml
+  - dotnetapp_editor_role.yaml
+  - dotnetapp_viewer_role.yaml
+  - goapp_admin_role.yaml
+  - goapp_editor_role.yaml
+  - goapp_viewer_role.yaml
 
