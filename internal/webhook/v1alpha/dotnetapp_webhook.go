@@ -2,6 +2,9 @@ package v1alpha
 
 import (
 	"context"
+<<<<<<< HEAD
+
+=======
 	"regexp"
 	"strings"
 
@@ -9,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+>>>>>>> tmp-original-31-03-26-02-51
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -22,8 +26,12 @@ var dotnetAppLog = logf.Log.WithName("dotnetapp-resource")
 
 // SetupDotnetAppWebhookWithManager registers the webhook for DotnetApp in the manager.
 func SetupDotnetAppWebhookWithManager(mgr ctrl.Manager) error {
+<<<<<<< HEAD
+	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.DotnetApp{}).
+=======
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&koptanv1alpha.DotnetApp{}).
+>>>>>>> tmp-original-31-03-26-02-51
 		WithValidator(&DotnetAppCustomValidator{}).
 		WithDefaulter(&DotnetAppCustomDefaulter{}).
 		Complete()
@@ -31,6 +39,18 @@ func SetupDotnetAppWebhookWithManager(mgr ctrl.Manager) error {
 
 // DotnetAppCustomDefaulter struct is responsible for setting default values on the custom resource of the
 // Kind DotnetApp when those are created or updated.
+<<<<<<< HEAD
+//
+// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
+// as it is used only for temporary operations and does not need to be deeply copied.
+type DotnetAppCustomDefaulter struct {
+	// TODO(user): Add more fields as needed for defaulting
+}
+
+// Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind DotnetApp.
+func (d *DotnetAppCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.DotnetApp) error {
+	dotnetapplog.Info("Defaulting for DotnetApp", "name", obj.GetName())
+=======
 type DotnetAppCustomDefaulter struct{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind DotnetApp.
@@ -39,6 +59,7 @@ func (d *DotnetAppCustomDefaulter) Default(ctx context.Context, obj runtime.Obje
 	if !ok {
 		return apierrors.NewBadRequest("expected DotnetApp object")
 	}
+>>>>>>> tmp-original-31-03-26-02-51
 
 	dotnetAppLog.Info("Defaulting for DotnetApp", "name", dotnetApp.GetName())
 
@@ -60,6 +81,32 @@ func (d *DotnetAppCustomDefaulter) Default(ctx context.Context, obj runtime.Obje
 // DotnetAppCustomValidator struct is responsible for validating the DotnetApp resource
 type DotnetAppCustomValidator struct{}
 
+<<<<<<< HEAD
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type DotnetApp.
+func (v *DotnetAppCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.DotnetApp) (admission.Warnings, error) {
+	dotnetapplog.Info("Validation for DotnetApp upon creation", "name", obj.GetName())
+
+	// TODO(user): fill in your validation logic upon object creation.
+
+	return nil, nil
+}
+
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type DotnetApp.
+func (v *DotnetAppCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.DotnetApp) (admission.Warnings, error) {
+	dotnetapplog.Info("Validation for DotnetApp upon update", "name", newObj.GetName())
+
+	// TODO(user): fill in your validation logic upon object update.
+
+	return nil, nil
+}
+
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type DotnetApp.
+func (v *DotnetAppCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.DotnetApp) (admission.Warnings, error) {
+	dotnetapplog.Info("Validation for DotnetApp upon deletion", "name", obj.GetName())
+
+	// TODO(user): fill in your validation logic upon object deletion.
+
+=======
 func (v *DotnetAppCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	dotnetApp, ok := obj.(*koptanv1alpha.DotnetApp)
 	if !ok {
@@ -85,6 +132,7 @@ func (v *DotnetAppCustomValidator) ValidateDelete(ctx context.Context, obj runti
 		return nil, apierrors.NewBadRequest("expected DotnetApp object")
 	}
 	dotnetAppLog.Info("Validation for DotnetApp upon deletion", "name", dotnetApp.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 	return nil, nil
 }
 

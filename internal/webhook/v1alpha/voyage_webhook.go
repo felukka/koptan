@@ -3,10 +3,13 @@ package v1alpha
 import (
 	"context"
 
+<<<<<<< HEAD
+=======
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+>>>>>>> tmp-original-31-03-26-02-51
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -20,8 +23,12 @@ var voyagelog = logf.Log.WithName("voyage-resource")
 
 // SetupVoyageWebhookWithManager registers the webhook for Voyage in the manager.
 func SetupVoyageWebhookWithManager(mgr ctrl.Manager) error {
+<<<<<<< HEAD
+	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.Voyage{}).
+=======
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&koptanv1alpha.Voyage{}).
+>>>>>>> tmp-original-31-03-26-02-51
 		WithValidator(&VoyageCustomValidator{}).
 		WithDefaulter(&VoyageCustomDefaulter{}).
 		Complete()
@@ -32,6 +39,10 @@ type VoyageCustomDefaulter struct {
 }
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Voyage.
+<<<<<<< HEAD
+func (d *VoyageCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.Voyage) error {
+	voyagelog.Info("Defaulting for Voyage", "name", obj.GetName())
+=======
 func (d *VoyageCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 	// Type assertion to ensure that obj is a *Voyage
 	voyage, ok := obj.(*koptanv1alpha.Voyage)
@@ -41,6 +52,7 @@ func (d *VoyageCustomDefaulter) Default(ctx context.Context, obj runtime.Object)
 
 	// Log the defaulting action
 	voyagelog.Info("Defaulting for Voyage", "name", voyage.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Default resources if not set
 	if voyage.Spec.Resources == nil {
@@ -55,6 +67,10 @@ type VoyageCustomValidator struct {
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type Voyage.
+<<<<<<< HEAD
+func (v *VoyageCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.Voyage) (admission.Warnings, error) {
+	voyagelog.Info("Validation for Voyage upon creation", "name", obj.GetName())
+=======
 func (v *VoyageCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that obj is a *Voyage
 	voyage, ok := obj.(*koptanv1alpha.Voyage)
@@ -64,17 +80,24 @@ func (v *VoyageCustomValidator) ValidateCreate(ctx context.Context, obj runtime.
 
 	// Log the validation action
 	voyagelog.Info("Validation for Voyage upon creation", "name", voyage.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Call the validation logic for Voyage
 	return nil, v.validateVoyage(voyage)
 }
 
+<<<<<<< HEAD
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type Voyage.
+func (v *VoyageCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.Voyage) (admission.Warnings, error) {
+	voyagelog.Info("Validation for Voyage upon update", "name", newObj.GetName())
+=======
 func (v *VoyageCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that newObj is a *Voyage
 	newVoyage, ok := newObj.(*koptanv1alpha.Voyage)
 	if !ok {
 		return nil, apierrors.NewBadRequest("expected Voyage object")
 	}
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Log the validation action
 	voyagelog.Info("Validation for Voyage upon update", "name", newVoyage.GetName())
@@ -83,6 +106,11 @@ func (v *VoyageCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newO
 	return nil, v.validateVoyage(newVoyage)
 }
 
+<<<<<<< HEAD
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type Voyage.
+func (v *VoyageCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.Voyage) (admission.Warnings, error) {
+	voyagelog.Info("Validation for Voyage upon deletion", "name", obj.GetName())
+=======
 func (v *VoyageCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that obj is a *Voyage
 	voyage, ok := obj.(*koptanv1alpha.Voyage)
@@ -92,6 +120,7 @@ func (v *VoyageCustomValidator) ValidateDelete(ctx context.Context, obj runtime.
 
 	// Log the validation action
 	voyagelog.Info("Validation for Voyage upon deletion", "name", voyage.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// No specific validation required for delete
 	return nil, nil

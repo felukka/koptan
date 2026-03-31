@@ -2,6 +2,9 @@ package v1alpha
 
 import (
 	"context"
+<<<<<<< HEAD
+
+=======
 	"regexp"
 	"strings"
 
@@ -9,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+>>>>>>> tmp-original-31-03-26-02-51
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -27,8 +31,12 @@ var javaapplog = logf.Log.WithName("javaapp-resource")
 
 // SetupJavaAppWebhookWithManager registers the webhook for JavaApp in the manager.
 func SetupJavaAppWebhookWithManager(mgr ctrl.Manager) error {
+<<<<<<< HEAD
+	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.JavaApp{}).
+=======
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&koptanv1alpha.JavaApp{}).
+>>>>>>> tmp-original-31-03-26-02-51
 		WithValidator(&JavaAppCustomValidator{}).
 		WithDefaulter(&JavaAppCustomDefaulter{}).
 		Complete()
@@ -39,12 +47,17 @@ type JavaAppCustomDefaulter struct {
 }
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind JavaApp.
+<<<<<<< HEAD
+func (d *JavaAppCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.JavaApp) error {
+	javaapplog.Info("Defaulting for JavaApp", "name", obj.GetName())
+=======
 func (d *JavaAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 	javaApp, ok := obj.(*koptanv1alpha.JavaApp)
 	if !ok {
 		return apierrors.NewBadRequest("expected JavaApp object")
 	}
 	javaapplog.Info("Defaulting for JavaApp", "name", javaApp.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 
 	if javaApp.Spec.BuildTool == BuildToolMaven && javaApp.Spec.MavenGoal == "" {
 		javaApp.Spec.MavenGoal = "package"
@@ -70,6 +83,31 @@ type JavaAppCustomValidator struct {
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type JavaApp.
+<<<<<<< HEAD
+func (v *JavaAppCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.JavaApp) (admission.Warnings, error) {
+	javaapplog.Info("Validation for JavaApp upon creation", "name", obj.GetName())
+
+	// TODO(user): fill in your validation logic upon object creation.
+
+	return nil, nil
+}
+
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type JavaApp.
+func (v *JavaAppCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.JavaApp) (admission.Warnings, error) {
+	javaapplog.Info("Validation for JavaApp upon update", "name", newObj.GetName())
+
+	// TODO(user): fill in your validation logic upon object update.
+
+	return nil, nil
+}
+
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type JavaApp.
+func (v *JavaAppCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.JavaApp) (admission.Warnings, error) {
+	javaapplog.Info("Validation for JavaApp upon deletion", "name", obj.GetName())
+
+	// TODO(user): fill in your validation logic upon object deletion.
+
+=======
 func (v *JavaAppCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	javaApp, ok := obj.(*koptanv1alpha.JavaApp)
 	if !ok {
@@ -96,6 +134,7 @@ func (v *JavaAppCustomValidator) ValidateDelete(ctx context.Context, obj runtime
 		return nil, apierrors.NewBadRequest("expected JavaApp object")
 	}
 	javaapplog.Info("Validation for JavaApp upon deletion", "name", javaApp.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 	return nil, nil
 }
 

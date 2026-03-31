@@ -2,7 +2,11 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
+<<<<<<< HEAD
+cliVersion: 4.13.1
+=======
 cliVersion: v4.10.1
+>>>>>>> tmp-original-31-03-26-02-51
 domain: felukka.org
 layout:
 - go.kubebuilder.io/v4

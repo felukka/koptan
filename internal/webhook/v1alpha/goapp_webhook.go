@@ -2,6 +2,9 @@ package v1alpha
 
 import (
 	"context"
+<<<<<<< HEAD
+
+=======
 	"regexp"
 	"strings"
 
@@ -9,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+>>>>>>> tmp-original-31-03-26-02-51
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -22,8 +26,12 @@ var goapplog = logf.Log.WithName("goapp-resource")
 
 // SetupGoAppWebhookWithManager registers the webhook for GoApp in the manager.
 func SetupGoAppWebhookWithManager(mgr ctrl.Manager) error {
+<<<<<<< HEAD
+	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.GoApp{}).
+=======
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&koptanv1alpha.GoApp{}).
+>>>>>>> tmp-original-31-03-26-02-51
 		WithValidator(&GoAppCustomValidator{}).
 		WithDefaulter(&GoAppCustomDefaulter{}).
 		Complete()
@@ -34,12 +42,17 @@ type GoAppCustomDefaulter struct {
 }
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind GoApp.
+<<<<<<< HEAD
+func (d *GoAppCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.GoApp) error {
+	goapplog.Info("Defaulting for GoApp", "name", obj.GetName())
+=======
 func (d *GoAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 	// Type assertion to ensure that obj is a *GoApp
 	goApp, ok := obj.(*koptanv1alpha.GoApp)
 	if !ok {
 		return apierrors.NewBadRequest("expected GoApp object")
 	}
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Log the defaulting action
 	goapplog.Info("Defaulting for GoApp", "name", goApp.GetName())
@@ -64,12 +77,27 @@ func (d *GoAppCustomDefaulter) Default(ctx context.Context, obj runtime.Object) 
 
 type GoAppCustomValidator struct{}
 
+<<<<<<< HEAD
+// GoAppCustomValidator struct is responsible for validating the GoApp resource
+// when it is created, updated, or deleted.
+//
+// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
+// as this struct is used only for temporary operations and does not need to be deeply copied.
+type GoAppCustomValidator struct {
+	// TODO(user): Add more fields as needed for validation
+}
+
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type GoApp.
+func (v *GoAppCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.GoApp) (admission.Warnings, error) {
+	goapplog.Info("Validation for GoApp upon creation", "name", obj.GetName())
+=======
 func (v *GoAppCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that obj is a *GoApp
 	goApp, ok := obj.(*koptanv1alpha.GoApp)
 	if !ok {
 		return nil, apierrors.NewBadRequest("expected GoApp object")
 	}
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Log the validation action
 	goapplog.Info("Validation for GoApp upon creation", "name", goApp.GetName())
@@ -78,12 +106,18 @@ func (v *GoAppCustomValidator) ValidateCreate(ctx context.Context, obj runtime.O
 	return nil, v.validateGoApp(goApp)
 }
 
+<<<<<<< HEAD
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type GoApp.
+func (v *GoAppCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.GoApp) (admission.Warnings, error) {
+	goapplog.Info("Validation for GoApp upon update", "name", newObj.GetName())
+=======
 func (v *GoAppCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that newObj is a *GoApp
 	newGoApp, ok := newObj.(*koptanv1alpha.GoApp)
 	if !ok {
 		return nil, apierrors.NewBadRequest("expected GoApp object")
 	}
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Log the validation action
 	goapplog.Info("Validation for GoApp upon update", "name", newGoApp.GetName())
@@ -92,12 +126,18 @@ func (v *GoAppCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newOb
 	return nil, v.validateGoApp(newGoApp)
 }
 
+<<<<<<< HEAD
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type GoApp.
+func (v *GoAppCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.GoApp) (admission.Warnings, error) {
+	goapplog.Info("Validation for GoApp upon deletion", "name", obj.GetName())
+=======
 func (v *GoAppCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that obj is a *GoApp
 	goApp, ok := obj.(*koptanv1alpha.GoApp)
 	if !ok {
 		return nil, apierrors.NewBadRequest("expected GoApp object")
 	}
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Log the validation action
 	goapplog.Info("Validation for GoApp upon deletion", "name", goApp.GetName())

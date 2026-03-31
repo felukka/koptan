@@ -1,0 +1,9 @@
+apiVersion: koptan.felukka.org/v1alpha
+kind: Slipway
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: slipway-sample
+spec:
+  # TODO(user): Add fields here

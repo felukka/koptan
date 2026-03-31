@@ -2,12 +2,14 @@ package v1alpha
 
 import (
 	"context"
-	"fmt"
 
+<<<<<<< HEAD
+=======
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+>>>>>>> tmp-original-31-03-26-02-51
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -21,8 +23,12 @@ var slipwaylog = logf.Log.WithName("slipway-resource")
 
 // SetupSlipwayWebhookWithManager registers the webhook for Slipway in the manager.
 func SetupSlipwayWebhookWithManager(mgr ctrl.Manager) error {
+<<<<<<< HEAD
+	return ctrl.NewWebhookManagedBy(mgr, &koptanv1alpha.Slipway{}).
+=======
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&koptanv1alpha.Slipway{}).
+>>>>>>> tmp-original-31-03-26-02-51
 		WithValidator(&SlipwayCustomValidator{}).
 		WithDefaulter(&SlipwayCustomDefaulter{}).
 		Complete()
@@ -33,6 +39,10 @@ type SlipwayCustomDefaulter struct {
 }
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Slipway.
+<<<<<<< HEAD
+func (d *SlipwayCustomDefaulter) Default(_ context.Context, obj *koptanv1alpha.Slipway) error {
+	slipwaylog.Info("Defaulting for Slipway", "name", obj.GetName())
+=======
 func (d *SlipwayCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 	// Type assertion to ensure that obj is a *Slipway
 	slipway, ok := obj.(*koptanv1alpha.Slipway)
@@ -42,6 +52,7 @@ func (d *SlipwayCustomDefaulter) Default(ctx context.Context, obj runtime.Object
 
 	// Log the defaulting action
 	slipwaylog.Info("Defaulting for Slipway", "name", slipway.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Default AppRef.Kind to "GoApp" if not set
 	if slipway.Spec.AppRef.Kind == "" {
@@ -61,6 +72,10 @@ type SlipwayCustomValidator struct {
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type Slipway.
+<<<<<<< HEAD
+func (v *SlipwayCustomValidator) ValidateCreate(_ context.Context, obj *koptanv1alpha.Slipway) (admission.Warnings, error) {
+	slipwaylog.Info("Validation for Slipway upon creation", "name", obj.GetName())
+=======
 func (v *SlipwayCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that obj is a *Slipway
 	slipway, ok := obj.(*koptanv1alpha.Slipway)
@@ -70,17 +85,24 @@ func (v *SlipwayCustomValidator) ValidateCreate(ctx context.Context, obj runtime
 
 	// Log the validation action
 	slipwaylog.Info("Validation for Slipway upon creation", "name", slipway.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Call the validation logic for Slipway
 	return nil, v.validateSlipway(slipway)
 }
 
+<<<<<<< HEAD
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type Slipway.
+func (v *SlipwayCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *koptanv1alpha.Slipway) (admission.Warnings, error) {
+	slipwaylog.Info("Validation for Slipway upon update", "name", newObj.GetName())
+=======
 func (v *SlipwayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that newObj is a *Slipway
 	newSlipway, ok := newObj.(*koptanv1alpha.Slipway)
 	if !ok {
 		return nil, apierrors.NewBadRequest("expected Slipway object")
 	}
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// Log the validation action
 	slipwaylog.Info("Validation for Slipway upon update", "name", newSlipway.GetName())
@@ -89,6 +111,11 @@ func (v *SlipwayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, new
 	return nil, v.validateSlipway(newSlipway)
 }
 
+<<<<<<< HEAD
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type Slipway.
+func (v *SlipwayCustomValidator) ValidateDelete(_ context.Context, obj *koptanv1alpha.Slipway) (admission.Warnings, error) {
+	slipwaylog.Info("Validation for Slipway upon deletion", "name", obj.GetName())
+=======
 func (v *SlipwayCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	// Type assertion to ensure that obj is a *Slipway
 	slipway, ok := obj.(*koptanv1alpha.Slipway)
@@ -98,6 +125,7 @@ func (v *SlipwayCustomValidator) ValidateDelete(ctx context.Context, obj runtime
 
 	// Log the validation action
 	slipwaylog.Info("Validation for Slipway upon deletion", "name", slipway.GetName())
+>>>>>>> tmp-original-31-03-26-02-51
 
 	// No specific validation required for delete
 	return nil, nil
