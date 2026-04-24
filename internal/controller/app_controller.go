@@ -157,7 +157,7 @@ func (r *AppReconciler) reconcile(ctx context.Context, app App) (ctrl.Result, er
 		log.Info("Dockerfile found in repo, using existing Dockerfile", "path", dockerfilePath)
 		content, err = os.ReadFile(dockerfilePath)
 		if err != nil {
-		    log.Error(err, "Failed to read Dockerfile")
+			log.Error(err, "Failed to read Dockerfile")
 			return ctrl.Result{}, err
 		}
 	} else {
