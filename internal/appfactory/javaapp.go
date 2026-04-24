@@ -127,15 +127,15 @@ func GenerateJavaApp(spec koptan.JavaAppSpec) (string, error) {
 		return "", fmt.Errorf("buildTool must be one of: maven, gradle; got %q", spec.BuildTool)
 	}
 
-	runtimeImage := fmt.Sprintf("eclipse-temurin:%s-jre-alpine", spec.JavaVersion)
+	runtimeImage := fmt.Sprintf("docker.io/eclipse-temurin:%s-jre-alpine", spec.JavaVersion)
 
 	var b strings.Builder
 
 	switch spec.BuildTool {
 	case mavenBuildTool:
-		fmt.Fprintf(&b, "FROM maven:3-eclipse-temurin-%s-alpine AS builder\n\n", spec.JavaVersion)
+		fmt.Fprintf(&b, "FROM docker.io/maven:3-eclipse-temurin-%s-alpine AS builder\n\n", spec.JavaVersion)
 	case gradleBuildTool:
-		fmt.Fprintf(&b, "FROM gradle:jdk%s-alpine AS builder\n\n", spec.JavaVersion)
+		fmt.Fprintf(&b, "FROM docker.io/gradle:jdk%s-alpine AS builder\n\n", spec.JavaVersion)
 	}
 
 	if len(spec.ExtraPackages) > 0 {

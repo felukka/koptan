@@ -108,6 +108,14 @@ func frameworkToSDK(framework string) string {
 	return ""
 }
 
+func checkFileExistence(dir, filename string) bool {
+	path := fmt.Sprintf("%s/%s", dir, filename)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
 func GenerateDotnetApp(spec koptan.DotnetAppSpec) (string, error) {
 	if spec.SDKVersion == "" {
 		return "", fmt.Errorf("sdkVersion is required")
@@ -163,8 +171,15 @@ func GenerateDotnetApp(spec koptan.DotnetAppSpec) (string, error) {
 	}
 
 	fmt.Fprintf(&b, "COPY %s %s/\n", spec.ProjectPath, projectDir)
-	fmt.Fprintf(&b, "COPY Directory.Build.props* ./\n")
-	fmt.Fprintf(&b, "COPY Directory.Packages.props* ./\n")
+
+	if checkFileExistence(projectDir, "Directory.Build.props") {
+		fmt.Fprintf(&b, "COPY Directory.Build.props* ./\n")
+	}
+
+	if checkFileExistence(projectDir, "Directory.Packages.props") {
+		fmt.Fprintf(&b, "COPY Directory.Packages.props* ./\n")
+	}
+
 	fmt.Fprintf(&b, "COPY nuget.config* ./\n\n")
 
 	fmt.Fprintf(&b, "RUN dotnet restore %q\n\n", spec.ProjectPath)
