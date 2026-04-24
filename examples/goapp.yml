@@ -1,0 +1,37 @@
+---
+apiVersion: koptan.felukka.org/v1alpha
+kind: GoApp
+metadata:
+  name: feedme
+spec:
+  source:
+    repo: https://github.com/mahmoudk1000/feedme
+    revision: main
+---
+apiVersion: koptan.felukka.org/v1alpha
+kind: Slipway
+metadata:
+  name: feedme
+spec:
+  appRef:
+    name: feedme
+    kind: GoApp
+  image:
+    # registry: docker.io
+    name: mahmoudk1000/feedme
+    creds:
+      username: mahmoudk1000
+      password: PAT
+---
+apiVersion: koptan.felukka.org/v1alpha
+kind: Voyage
+metadata:
+  name: feedme
+spec:
+  slipwayRef:
+    name: feedme
+  port: 8080
+  replicas: 2
+  env:
+    - name: ENV
+      value: production
