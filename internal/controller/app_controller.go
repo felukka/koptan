@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -142,14 +143,34 @@ func (r *AppReconciler) reconcile(ctx context.Context, app App) (ctrl.Result, er
 		)
 	}
 
-	log.Info("running discovery on cloned repo")
-	content, err := app.RunDiscoveryAndGenerate(cloneDir)
-	if err != nil {
-		return ctrl.Result{}, r.failWith(ctx, app, "DiscoveryFailed", err.Error())
+	dockerfileName := "Dockerfile" // The default Dockerfile
+	// check if a different dockerfile name is given
+	if src.DockerfileName != "" {
+		dockerfileName = src.DockerfileName
+	}
+
+	dockerfilePath := filepath.Join(cloneDir, dockerfileName)
+	var content []byte
+
+	// Check if the Dockerfile exists at the specified path
+	if _, err := os.Stat(dockerfilePath); err == nil {
+		log.Info("Dockerfile found in repo, using existing Dockerfile", "path", dockerfilePath)
+		content, err = os.ReadFile(dockerfilePath)
+		if err != nil {
+		    log.Error(err, "Failed to read Dockerfile")
+			return ctrl.Result{}, err
+		}
+	} else {
+		log.Info("No Dockerfile found, running discovery", "repo", src.Repo)
+		contentStr, err := app.RunDiscoveryAndGenerate(cloneDir)
+		if err != nil {
+			return ctrl.Result{}, r.failWith(ctx, app, "DiscoveryFailed", err.Error())
+		}
+		content = []byte(contentStr)
 	}
 
 	cmName := app.GetName() + "-dockerfile"
-	if err := r.reconcileConfigMap(ctx, app, cmName, content); err != nil {
+	if err := r.reconcileConfigMap(ctx, app, cmName, string(content)); err != nil {
 		return ctrl.Result{}, err
 	}
 

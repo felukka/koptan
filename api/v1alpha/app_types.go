@@ -27,4 +27,7 @@ type SourceRef struct {
 
 	// +optional
 	PATToken string `json:"patToken,omitempty"`
+
+	// +optional
+	DockerfileName string `json:"dockerfileName,omitempty"`
 }
