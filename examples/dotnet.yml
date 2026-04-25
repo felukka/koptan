@@ -1,0 +1,38 @@
+---
+apiVersion: koptan.felukka.org/v1alpha
+kind: DotnetApp
+metadata:
+  name: projname
+spec:
+  source:
+    repo: https://github.com/username/dotnet-proj
+    revision: main
+    dockerfileName: "Dockerfile.prod" # This is optional, default is Dockerfile
+---
+apiVersion: koptan.felukka.org/v1alpha
+kind: Slipway
+metadata:
+  name: projname
+spec:
+  appRef:
+    name: projname
+    kind: DotnetApp
+  image:
+    # registry: docker.io
+    name: username/reponame
+    creds:
+      username: username
+      password: PAT
+---
+apiVersion: koptan.felukka.org/v1alpha
+kind: Voyage
+metadata:
+  name: projname
+spec:
+  slipwayRef:
+    name: projname
+  port: 8080
+  replicas: 2
+  env:
+    - name: ENV
+      value: production
