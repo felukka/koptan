@@ -386,9 +386,6 @@ func (r *SlipwayReconciler) trackBuild(
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		//if delErr := r.Delete(ctx, pod); delErr != nil && !errors.IsNotFound(delErr) {
-		//	return ctrl.Result{}, delErr
-		//}
 		return ctrl.Result{}, nil
 	}
 
