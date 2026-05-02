@@ -354,6 +354,13 @@ func (r *SlipwayReconciler) trackBuild(
 	phase, msg, finished := simplifyPodStatus(pod)
 
 	if finished {
+		if isBuildSucceeded(phase) {
+			if delErr := r.Delete(ctx, pod); delErr != nil && !errors.IsNotFound(delErr) {
+				return ctrl.Result{}, delErr
+			}
+			logger.Info("Successfully built, pod deleted", "pod", pod.Name)
+		}
+
 		err := r.updateStatus(
 			ctx,
 			types.NamespacedName{Name: sw.Name, Namespace: sw.Namespace},
@@ -379,9 +386,6 @@ func (r *SlipwayReconciler) trackBuild(
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if delErr := r.Delete(ctx, pod); delErr != nil && !errors.IsNotFound(delErr) {
-			return ctrl.Result{}, delErr
-		}
 		return ctrl.Result{}, nil
 	}
 
@@ -402,6 +406,10 @@ func (r *SlipwayReconciler) trackBuild(
 	}
 
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+}
+
+func isBuildSucceeded(phase koptan.SlipwayPhase) bool {
+	return phase == koptan.SlipwayPhaseSucceeded
 }
 
 func simplifyPodStatus(pod *corev1.Pod) (koptan.SlipwayPhase, string, bool) {
