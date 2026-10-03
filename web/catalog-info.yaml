@@ -1,0 +1,13 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: koptan
+  description: Koptan, your autonomous autopilot for your cluster.
+  annotations:
+    github.com/project-slug: backstage/backstage
+    backstage.io/techdocs-ref: dir:../docs
+spec:
+  type: website
+  owner: mahmoudk1000@gmail.com
+  lifecycle: experimental
