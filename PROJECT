@@ -17,34 +17,25 @@ resources:
   controller: true
   domain: felukka.org
   group: koptan
-  kind: Voyage
-  path: github.com/felukka/koptan/api/v1alpha
-  version: v1alpha
+  kind: Service
+  path: github.com/felukka/koptan/api/v1
+  version: v1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: felukka.org
   group: koptan
-  kind: GoApp
-  path: github.com/felukka/koptan/api/v1alpha
-  version: v1alpha
+  kind: CI
+  path: github.com/felukka/koptan/api/v1
+  version: v1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: felukka.org
   group: koptan
-  kind: DotnetApp
-  path: github.com/felukka/koptan/api/v1alpha
-  version: v1alpha
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: felukka.org
-  group: koptan
-  kind: JavaApp
-  path: github.com/felukka/koptan/api/v1alpha
-  version: v1alpha
+  kind: CD
+  path: github.com/felukka/koptan/api/v1
+  version: v1
 version: "3"

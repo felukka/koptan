@@ -1,0 +1,45 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: kubernetes-api
+  title: Kubernetes API
+  description: Kubernetes API used by the Koptan operator.
+  annotations:
+    koptan.dev/resource-kind: kubernetes-api
+spec:
+  type: kubernetes-cluster
+  lifecycle: production
+  owner: platform-team
+  system: koptan
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: koptan-crds
+  title: Koptan Custom Resource Definitions
+  description: Custom Kubernetes APIs managed by the Koptan operator.
+  annotations:
+    github.com/project-slug: felukka/koptan
+    koptan.dev/resource-kind: custom-resource-definitions
+spec:
+  type: kubernetes-crds
+  lifecycle: experimental
+  owner: platform-team
+  system: koptan
+  dependsOn:
+    - resource:koptan/kubernetes-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: koptan-container-registry
+  title: Koptan Container Registry
+  description: Container registry used for Koptan and application images.
+  annotations:
+    koptan.dev/resource-kind: container-registry
+spec:
+  type: container-registry
+  lifecycle: experimental
+  owner: platform-team
+  system: koptan

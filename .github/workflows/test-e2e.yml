@@ -12,6 +12,7 @@ on:
       - '*.nix'
       - .gitignore
       - .golangci.yml
+      - web/**
 jobs:
   test-e2e:
     name: Run on Ubuntu

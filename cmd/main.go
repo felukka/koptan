@@ -16,7 +16,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	v1alpha "github.com/felukka/koptan/api/v1alpha"
+	koptanv1 "github.com/felukka/koptan/api/v1"
 	"github.com/felukka/koptan/internal/controller"
 )
 
