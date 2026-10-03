@@ -1,7 +1,9 @@
 {
-  description = "Koptan";
+  description = "Koptan, your autonomous autopilot for your cluster.";
 
-  inputs.nixpkgs.url = "nixpkgs/nixos-25.11";
+  inputs = {
+    nixpkgs.url = "nixpkgs/nixos-26.05";
+  };
 
   outputs =
     { self, nixpkgs }:
@@ -28,17 +30,14 @@
             vendorHash = "sha256-sJlzlja7v4Db9B1GUBK1ISvKBdu6lzOSpd3wSSQPxJQ=";
 
             meta = with pkgs.lib; {
-              description = ''
-                Koptan is a DevOps citizen tool that helps you automate the full cycle
-                 deployment in Kubernetes.
-              '';
+              description = "Koptan Kubernetes Operator";
               homepage = "https://felukka.org";
               platforms = platforms.linux;
             };
           };
 
           docker = pkgs.dockerTools.buildImage {
-            inherit name;
+            name = "${name}";
             tag = version;
             copyToRoot = pkgs.buildEnv {
               name = "image-root";
@@ -47,6 +46,60 @@
             };
             config = {
               Cmd = [ "/bin/koptan" ];
+            };
+          };
+
+          web = pkgs.mkDerivation {
+            pname = "${name}-ui";
+            inherit version;
+            src = ./web;
+
+            nativeBuildInputs = with pkgs; [
+              nodejs
+              yarn
+            ];
+
+            buildPhase = ''
+              export HOME=$TMPDIR
+              yarn --immutable --immutable-cache
+              yarn tsc
+              yarn build:all
+            '';
+
+            installPhase = ''
+              mkdir -p $out/share/koptan-ui
+              cp -r . $out/share/koptan-ui/
+              mkdir -p $out/bin
+              cat << 'EOF' > $out/bin/koptan-ui
+              #!/bin/sh
+              cd @out@/share/koptan-ui
+              exec node packages/backend/dist/index.cjs.js "$@"
+              EOF
+              substituteInPlace $out/bin/koptan-ui --subst-var out
+              chmod +x $out/bin/koptan-ui
+            '';
+          };
+
+          web-docker = pkgs.dockerTools.buildImage {
+            name = "${name}-web";
+            tag = version;
+            copyToRoot = pkgs.buildEnv {
+              name = "image-root";
+              paths = [
+                self.packages.${system}.web
+                pkgs.nodejs
+              ];
+              pathsToLink = [
+                "/bin"
+                "/share"
+              ];
+            };
+            config = {
+              Cmd = [ "/bin/koptan-ui" ];
+              WorkingDir = "/share/koptan-ui";
+              ExposedPorts = {
+                "3000/tcp" = { };
+              };
             };
           };
         }
@@ -71,6 +124,11 @@
               go-tools
               gotools
               kubebuilder
+              nodejs_22
+              yarn
+              typescript
+              typescript-language-server
+              biome
               (python3.withPackages (
                 p: with p; [
                   mkdocs-material
