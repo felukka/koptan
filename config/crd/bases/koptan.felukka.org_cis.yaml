@@ -54,6 +54,9 @@ spec:
           spec:
             description: CISpec defines the desired state of a CI build.
             properties:
+              dockerfileConfigMap:
+                description: DockerfileConfigMap holds the Dockerfile (key "Dockerfile").
+                type: string
               extraSteps:
                 items:
                   description: A single application container that you want to run
@@ -1577,8 +1580,15 @@ spec:
               image:
                 description: Image defines the target registry for the built image.
                 properties:
+                  credentialsSecret:
+                    description: |-
+                      CredentialsSecret names a kubernetes.io/dockerconfigjson Secret used
+                      to push (and pull) the image.
+                    type: string
                   loginSecret:
-                    description: LoginSecret contains registry credentials.
+                    description: |-
+                      Deprecated: use CredentialsSecret. When set, the operator converts it
+                      into a dockerconfigjson Secret named <ci>-registry.
                     properties:
                       password:
                         description: base64 encoded secret
@@ -1601,6 +1611,10 @@ spec:
                 - registry
                 - repo
                 type: object
+              revision:
+                description: Revision is the commit SHA to build; the Service controller
+                  sets it.
+                type: string
               service:
                 description: Service references the Service CRD that provides the
                   source repo.
@@ -1621,6 +1635,13 @@ spec:
               buildCount:
                 format: int64
                 type: integer
+              buildPod:
+                description: BuildPod is the Pod running (or that ran) the latest
+                  build.
+                type: string
+              buildingRevision:
+                description: BuildingRevision is the revision of the build in BuildPod.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -1689,6 +1710,11 @@ spec:
                 type: string
               message:
                 type: string
+              observedGeneration:
+                description: ObservedGeneration is the spec generation of the latest
+                  build.
+                format: int64
+                type: integer
               phase:
                 type: string
             type: object

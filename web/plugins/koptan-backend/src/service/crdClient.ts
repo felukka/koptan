@@ -2,6 +2,8 @@ import {
   CoreV1Api,
   CustomObjectsApi,
   KubeConfig,
+  PatchStrategy,
+  setHeaderOptions,
   VersionApi,
 } from '@kubernetes/client-node';
 import {
@@ -25,13 +27,28 @@ export interface KoptanClient {
     namespace: string,
     body: RawResource,
   ): Promise<RawResource>;
-  /** Creates an Opaque Secret holding the given string data. */
+  /** Creates a Secret (Opaque unless a type is given) holding string data. */
   createSecret(
     namespace: string,
     name: string,
     data: Record<string, string>,
+    type?: string,
   ): Promise<void>;
+  /** Makes a Secret owned by a resource, so it is deleted with it. */
+  setSecretOwner(
+    namespace: string,
+    name: string,
+    owner: OwnerRef,
+  ): Promise<void>;
+  deleteSecret(namespace: string, name: string): Promise<void>;
   clusterInfo(): Promise<ClusterInfo>;
+}
+
+export interface OwnerRef {
+  apiVersion: string;
+  kind: string;
+  name: string;
+  uid: string;
 }
 
 export class KubeKoptanClient implements KoptanClient {
@@ -104,11 +121,33 @@ export class KubeKoptanClient implements KoptanClient {
     namespace: string,
     name: string,
     data: Record<string, string>,
+    type = 'Opaque',
   ): Promise<void> {
     await this.kubeConfig.makeApiClient(CoreV1Api).createNamespacedSecret({
       namespace,
-      body: { metadata: { name, namespace }, type: 'Opaque', stringData: data },
+      body: { metadata: { name, namespace }, type, stringData: data },
     });
+  }
+
+  async setSecretOwner(
+    namespace: string,
+    name: string,
+    owner: OwnerRef,
+  ): Promise<void> {
+    await this.kubeConfig.makeApiClient(CoreV1Api).patchNamespacedSecret(
+      {
+        namespace,
+        name,
+        body: { metadata: { ownerReferences: [owner] } },
+      },
+      setHeaderOptions('Content-Type', PatchStrategy.MergePatch),
+    );
+  }
+
+  async deleteSecret(namespace: string, name: string): Promise<void> {
+    await this.kubeConfig
+      .makeApiClient(CoreV1Api)
+      .deleteNamespacedSecret({ namespace, name });
   }
 
   async clusterInfo(): Promise<ClusterInfo> {

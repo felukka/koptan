@@ -11,7 +11,6 @@ import (
 	koptanv1 "github.com/felukka/koptan/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,6 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -42,7 +42,9 @@ type CDReconciler struct {
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile implements the CD reconciliation loop.
-// Lifecycle: Waiting -> Deploying -> Running.
+// Reconcile deploys the CI's latest image. It runs on every change (CD
+// spec, CI status, Deployment status), so replica, env, port and image
+// changes are always applied.
 func (r *CDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -51,7 +53,6 @@ func (r *CDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// --- Deletion handling ---
 	if !cd.DeletionTimestamp.IsZero() {
 		if controllerutil.ContainsFinalizer(&cd, cdFinalizer) {
 			controllerutil.RemoveFinalizer(&cd, cdFinalizer)
@@ -60,7 +61,6 @@ func (r *CDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
-	// --- Add finalizer ---
 	if !controllerutil.ContainsFinalizer(&cd, cdFinalizer) {
 		controllerutil.AddFinalizer(&cd, cdFinalizer)
 		if err := r.Update(ctx, &cd); err != nil {
@@ -69,281 +69,204 @@ func (r *CDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// --- Skip if already Running ---
-	if cd.Status.Phase == koptanv1.CDPhaseRunning {
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-	}
-
-	// --- Phase: Deploying ---
-	cd.Status.Phase = koptanv1.CDPhaseDeploying
-	cd.Status.Message = "Starting deployment"
-	setCDPhase(&cd, koptanv1.CDPhaseDeploying, "Starting deployment")
-	if err := r.patchStatus(ctx, &cd); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Resolve the CI to get the image.
+	orig := cd.DeepCopy()
 	ci := &koptanv1.CI{}
-	ciKey := types.NamespacedName{
-		Name:      cd.Spec.CI.Name,
-		Namespace: cd.Namespace,
-	}
-	if err := r.Get(ctx, ciKey, ci); err != nil {
-		r.setCDFailed(ctx, &cd, "CIResolveFailed", fmt.Sprintf("resolve CI: %v", err))
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+	if err := r.Get(ctx, types.NamespacedName{Name: cd.Spec.CI.Name, Namespace: cd.Namespace}, ci); err != nil {
+		setCDCondition(&cd, koptanv1.CDPhaseWaiting, metav1.ConditionFalse, "CIResolveFailed",
+			fmt.Sprintf("resolve CI %q: %v", cd.Spec.CI.Name, err))
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, r.patchStatus(ctx, orig, &cd)
 	}
 
-	if ci.Status.Phase != koptanv1.CIPhaseSucceeded || ci.Status.Image == "" {
-		msg := fmt.Sprintf("Waiting for CI %q to succeed (current phase: %s)",
-			ci.Name, ci.Status.Phase)
-		r.setCDWaiting(ctx, &cd, msg)
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
+	// Deploy the last image that built successfully, even while a newer
+	// build runs or after it failed.
 	image := ci.Status.Image
-	log.Info("deploying image", "image", image)
+	if image == "" {
+		setCDCondition(&cd, koptanv1.CDPhaseWaiting, metav1.ConditionFalse, "WaitingForCI",
+			fmt.Sprintf("Waiting for CI %q to build an image (phase: %s)", ci.Name, ci.Status.Phase))
+		return ctrl.Result{}, r.patchStatus(ctx, orig, &cd)
+	}
 
-	// --- Reconcile Deployment ---
-	if err := r.reconcileDeployment(ctx, &cd, image); err != nil {
-		r.setCDFailed(ctx, &cd, "DeploymentFailed",
+	deploy, err := r.reconcileDeployment(ctx, &cd, image)
+	if err != nil {
+		setCDCondition(&cd, koptanv1.CDPhaseFailed, metav1.ConditionFalse, "DeploymentFailed",
 			fmt.Sprintf("create/update deployment: %v", err))
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+		_ = r.patchStatus(ctx, orig, &cd)
+		return ctrl.Result{}, err
 	}
-
-	// --- Reconcile Service ---
 	if err := r.reconcileService(ctx, &cd); err != nil {
-		r.setCDFailed(ctx, &cd, "ServiceFailed",
+		setCDCondition(&cd, koptanv1.CDPhaseFailed, metav1.ConditionFalse, "ServiceFailed",
 			fmt.Sprintf("create/update service: %v", err))
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
-	}
-
-	// --- Mark Running ---
-	cd.Status.Phase = koptanv1.CDPhaseRunning
-	cd.Status.Image = image
-	cd.Status.Revision = cd.Spec.CI.Name
-	cd.Status.Message = "deployment complete"
-	cd.Status.Conditions = []metav1.Condition{{
-		Type:               "Ready",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "Deployed",
-		Message:            fmt.Sprintf("Image %s deployed", image),
-	}}
-
-	if err := r.patchStatus(ctx, &cd); err != nil {
+		_ = r.patchStatus(ctx, orig, &cd)
 		return ctrl.Result{}, err
 	}
 
-	log.Info("deployment complete", "image", image)
+	cd.Status.Image = image
+	cd.Status.Revision = ci.Status.Revision
+	cd.Status.AvailableReplicas = deploy.Status.AvailableReplicas
+	want := int32(1)
+	if deploy.Spec.Replicas != nil {
+		want = *deploy.Spec.Replicas
+	}
+	rolledOut := deploy.Status.ObservedGeneration >= deploy.Generation &&
+		deploy.Status.UpdatedReplicas >= want && deploy.Status.AvailableReplicas >= want
+	switch {
+	case rolledOut:
+		setCDCondition(&cd, koptanv1.CDPhaseRunning, metav1.ConditionTrue, "Deployed",
+			fmt.Sprintf("%d/%d replicas available, image %s", deploy.Status.AvailableReplicas, want, image))
+	case deployFailed(deploy):
+		setCDCondition(&cd, koptanv1.CDPhaseFailed, metav1.ConditionFalse, "ProgressDeadlineExceeded",
+			fmt.Sprintf("deployment is not progressing: %d/%d replicas available", deploy.Status.AvailableReplicas, want))
+	default:
+		setCDCondition(&cd, koptanv1.CDPhaseDeploying, metav1.ConditionUnknown, "RollingOut",
+			fmt.Sprintf("%d/%d replicas available, rolling out %s", deploy.Status.AvailableReplicas, want, image))
+	}
+	if err := r.patchStatus(ctx, orig, &cd); err != nil {
+		return ctrl.Result{}, err
+	}
+	log.V(1).Info("reconciled deployment", "image", image, "phase", cd.Status.Phase)
 	return ctrl.Result{}, nil
 }
 
-// reconcileDeployment creates or updates the Kubernetes Deployment.
-func (r *CDReconciler) reconcileDeployment(ctx context.Context, cd *koptanv1.CD, image string) error {
-	log := logf.FromContext(ctx)
+func deployFailed(d *appsv1.Deployment) bool {
+	for _, c := range d.Status.Conditions {
+		if c.Type == appsv1.DeploymentProgressing && c.Status == corev1.ConditionFalse &&
+			c.Reason == "ProgressDeadlineExceeded" {
+			return true
+		}
+	}
+	return false
+}
 
+// reconcileDeployment creates or updates the Deployment and returns it with
+// its current status.
+func (r *CDReconciler) reconcileDeployment(ctx context.Context, cd *koptanv1.CD, image string) (*appsv1.Deployment, error) {
 	replicas := cd.Spec.Replicas
-	if replicas <= 0 {
+	if replicas < 0 {
 		replicas = 1
 	}
-
+	port := cd.Spec.Port
+	if port == 0 {
+		port = defaultPort
+	}
 	labels := map[string]string{
 		"koptan.felukka.org/cd":        cd.Name,
 		"koptan.felukka.org/component": "app",
 	}
 
-	envVars := make([]corev1.EnvVar, 0, len(cd.Spec.Env)+1)
-	envVars = append(envVars, corev1.EnvVar{
-		Name:  "CONTAINER_IMAGE",
-		Value: image,
-	})
-	envVars = append(envVars, cd.Spec.Env...)
+	env := []corev1.EnvVar{
+		{Name: "CONTAINER_IMAGE", Value: image},
+		{Name: "PORT", Value: fmt.Sprint(port)},
+	}
+	env = append(env, cd.Spec.Env...)
 
 	container := corev1.Container{
-		Name:  cd.Name,
+		Name:  "app",
 		Image: image,
-		Env:   envVars,
-		Ports: []corev1.ContainerPort{{
-			ContainerPort: 8080,
-			Protocol:      corev1.ProtocolTCP,
-		}},
-	}
-
-	// Apply resource limits from the CRD spec.
-	if cd.Spec.Resources != nil {
-		if cd.Spec.Resources.CPURequest != nil {
-			container.Resources.Requests = corev1.ResourceList{
-				corev1.ResourceCPU: *cd.Spec.Resources.CPURequest,
-			}
-		}
-		if cd.Spec.Resources.MemoryRequest != nil {
-			if container.Resources.Requests == nil {
-				container.Resources.Requests = corev1.ResourceList{}
-			}
-			container.Resources.Requests[corev1.ResourceMemory] = *cd.Spec.Resources.MemoryRequest
-		}
-		if cd.Spec.Resources.CPULimit != nil {
-			container.Resources.Limits = corev1.ResourceList{
-				corev1.ResourceCPU: *cd.Spec.Resources.CPULimit,
-			}
-		}
-		if cd.Spec.Resources.MemoryLimit != nil {
-			if container.Resources.Limits == nil {
-				container.Resources.Limits = corev1.ResourceList{}
-			}
-			container.Resources.Limits[corev1.ResourceMemory] = *cd.Spec.Resources.MemoryLimit
-		}
-	}
-
-	desired := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cd.Name,
-			Namespace: cd.Namespace,
-			Labels:    labels,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+		Env:   env,
+		Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: port, Protocol: corev1.ProtocolTCP}},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(port)},
 			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{container},
-				},
-			},
+			PeriodSeconds: 5,
 		},
 	}
-
-	if err := controllerutil.SetControllerReference(cd, desired, r.Scheme); err != nil {
-		return fmt.Errorf("set controller ref on Deployment: %w", err)
+	if res := cd.Spec.Resources; res != nil {
+		container.Resources = corev1.ResourceRequirements{Requests: corev1.ResourceList{}, Limits: corev1.ResourceList{}}
+		if res.CPURequest != nil {
+			container.Resources.Requests[corev1.ResourceCPU] = *res.CPURequest
+		}
+		if res.MemoryRequest != nil {
+			container.Resources.Requests[corev1.ResourceMemory] = *res.MemoryRequest
+		}
+		if res.CPULimit != nil {
+			container.Resources.Limits[corev1.ResourceCPU] = *res.CPULimit
+		}
+		if res.MemoryLimit != nil {
+			container.Resources.Limits[corev1.ResourceMemory] = *res.MemoryLimit
+		}
 	}
 
-	var existing appsv1.Deployment
-	err := r.Get(ctx, types.NamespacedName{Name: cd.Name, Namespace: cd.Namespace}, &existing)
-	if errors.IsNotFound(err) {
-		log.Info("creating Deployment", "deployment", cd.Name)
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return fmt.Errorf("get deployment %s: %w", cd.Name, err)
+	podSpec := corev1.PodSpec{Containers: []corev1.Container{container}}
+	if cd.Spec.ImagePullSecret != "" {
+		podSpec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: cd.Spec.ImagePullSecret}}
 	}
 
-	// Update if specs differ.
-	existing.Spec.Replicas = desired.Spec.Replicas
-	existing.Spec.Template = desired.Spec.Template
-	existing.Labels = desired.Labels
-	log.Info("updating Deployment", "deployment", cd.Name)
-	return r.Update(ctx, &existing)
+	deploy := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: cd.Name, Namespace: cd.Namespace}}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, deploy, func() error {
+		deploy.Labels = labels
+		deploy.Spec.Replicas = &replicas
+		if deploy.Spec.Selector == nil {
+			deploy.Spec.Selector = &metav1.LabelSelector{MatchLabels: labels}
+		}
+		deploy.Spec.Template.Labels = labels
+		deploy.Spec.Template.Spec = podSpec
+		return controllerutil.SetControllerReference(cd, deploy, r.Scheme)
+	})
+	return deploy, err
 }
 
-// reconcileService creates or updates the Kubernetes headless Service.
+// reconcileService exposes the Deployment on port 80.
 func (r *CDReconciler) reconcileService(ctx context.Context, cd *koptanv1.CD) error {
-	log := logf.FromContext(ctx)
-
+	port := cd.Spec.Port
+	if port == 0 {
+		port = defaultPort
+	}
 	labels := map[string]string{
 		"koptan.felukka.org/cd":        cd.Name,
 		"koptan.felukka.org/component": "app",
 	}
-
-	desired := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cd.Name,
-			Namespace: cd.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: labels,
-			Ports: []corev1.ServicePort{{
-				Name:       "http",
-				Port:       80,
-				TargetPort: intstr.FromInt(8080),
-				Protocol:   corev1.ProtocolTCP,
-			}},
-			Type: corev1.ServiceTypeClusterIP,
-		},
-	}
-
-	if err := controllerutil.SetControllerReference(cd, desired, r.Scheme); err != nil {
-		return fmt.Errorf("set controller ref on Service: %w", err)
-	}
-
-	var existing corev1.Service
-	err := r.Get(ctx, types.NamespacedName{Name: cd.Name, Namespace: cd.Namespace}, &existing)
-	if errors.IsNotFound(err) {
-		log.Info("creating Service", "service", cd.Name)
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return fmt.Errorf("get service %s: %w", cd.Name, err)
-	}
-
-	existing.Spec = desired.Spec
-	existing.Labels = desired.Labels
-	log.Info("updating Service", "service", cd.Name)
-	return r.Update(ctx, &existing)
+	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: cd.Name, Namespace: cd.Namespace}}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
+		svc.Labels = labels
+		svc.Spec.Selector = labels
+		svc.Spec.Type = corev1.ServiceTypeClusterIP
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:       "http",
+			Port:       80,
+			TargetPort: intstr.FromInt32(port),
+			Protocol:   corev1.ProtocolTCP,
+		}}
+		return controllerutil.SetControllerReference(cd, svc, r.Scheme)
+	})
+	return err
 }
 
-// patchStatus patches the CD status with the latest conditions.
-func (r *CDReconciler) patchStatus(ctx context.Context, cd *koptanv1.CD) error {
-	return r.Status().Update(ctx, cd)
+func (r *CDReconciler) patchStatus(ctx context.Context, orig, cd *koptanv1.CD) error {
+	return r.Status().Patch(ctx, cd, client.MergeFrom(orig))
 }
 
-// setCDPhase sets the CD phase and message on the object (caller must persist).
-func setCDPhase(cd *koptanv1.CD, phase koptanv1.CDPhase, message string) {
+// setCDCondition sets the phase, message and Ready condition.
+func setCDCondition(cd *koptanv1.CD, phase koptanv1.CDPhase, status metav1.ConditionStatus, reason, message string) {
 	cd.Status.Phase = phase
 	cd.Status.Message = message
-	cd.Status.Conditions = []metav1.Condition{{
-		Type:               "Ready",
-		Status:             metav1.ConditionUnknown,
-		LastTransitionTime: metav1.Now(),
-		Reason:             string(phase),
-		Message:            message,
-	}}
-}
-
-// setCDWaiting marks the CD as Waiting for CI.
-func (r *CDReconciler) setCDWaiting(ctx context.Context, cd *koptanv1.CD, message string) {
-	cd.Status.Phase = koptanv1.CDPhaseWaiting
-	cd.Status.Message = message
-	if cd.Status.Conditions == nil {
-		cd.Status.Conditions = []metav1.Condition{}
-	}
 	meta.SetStatusCondition(&cd.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionFalse,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "WaitingForCI",
-		Message:            message,
+		Type: "Ready", Status: status, Reason: reason, Message: message,
 	})
-	_ = r.patchStatus(ctx, cd)
 }
 
-// setCDFailed marks the CD as Failed.
-func (r *CDReconciler) setCDFailed(ctx context.Context, cd *koptanv1.CD, reason, msg string) {
-	cd.Status.Phase = koptanv1.CDPhaseFailed
-	cd.Status.Message = msg
-	if cd.Status.Conditions == nil {
-		cd.Status.Conditions = []metav1.Condition{}
-	}
-	meta.SetStatusCondition(&cd.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionFalse,
-		LastTransitionTime: metav1.Now(),
-		Reason:             reason,
-		Message:            msg,
-	})
-	_ = r.patchStatus(ctx, cd)
-}
-
-// SetupWithManager sets up the controller with the Manager.
+// SetupWithManager sets up the controller with the Manager. CI changes
+// (a new image) re-trigger the CDs that reference the CI.
 func (r *CDReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&koptanv1.CD{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
+		Watches(&koptanv1.CI{}, handler.EnqueueRequestsFromMapFunc(
+			func(ctx context.Context, o client.Object) []ctrl.Request {
+				var cds koptanv1.CDList
+				if err := mgr.GetClient().List(ctx, &cds, client.InNamespace(o.GetNamespace())); err != nil {
+					return nil
+				}
+				var reqs []ctrl.Request
+				for _, cd := range cds.Items {
+					if cd.Spec.CI.Name == o.GetName() {
+						reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{
+							Namespace: cd.Namespace, Name: cd.Name}})
+					}
+				}
+				return reqs
+			})).
 		Named("cd").
 		Complete(r)
 }

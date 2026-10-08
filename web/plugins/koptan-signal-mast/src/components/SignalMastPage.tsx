@@ -40,14 +40,14 @@ const RULES: { group: string; items: [string, string, boolean][] }[] = [
     ],
   },
   {
-    group: 'Slipway Pipeline',
+    group: 'CI Builds',
     items: [
       ['Build Succeeded', 'CI pipeline completion status.', false],
       ['Build Failed', 'Immediate alert on build step failure.', true],
     ],
   },
   {
-    group: 'Voyage Engine',
+    group: 'CD Deployments',
     items: [
       ['Deploy Succeeded', 'Confirmation of rolling update success.', false],
       ['Deploy Failed', 'Rollback triggers or orchestration errors.', true],

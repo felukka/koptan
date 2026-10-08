@@ -45,14 +45,29 @@ type CDSpec struct {
 
 	// +optional
 	Resources *Resources `json:"resources,omitempty"`
+
+	// Port the container listens on (default 8080).
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int32 `json:"port,omitempty"`
+
+	// ImagePullSecret is set from the CI's registry credentials.
+	// +optional
+	ImagePullSecret string `json:"imagePullSecret,omitempty"`
 }
 
 // CDStatus defines the observed state of a CD deployment.
 type CDStatus struct {
-	Phase      CDPhase            `json:"phase,omitempty"`
-	Revision   string             `json:"latestRevision,omitempty"`
-	Image      string             `json:"latestImage,omitempty"`
-	Message    string             `json:"message,omitempty"`
+	Phase    CDPhase `json:"phase,omitempty"`
+	Revision string  `json:"latestRevision,omitempty"`
+	Image    string  `json:"latestImage,omitempty"`
+	Message  string  `json:"message,omitempty"`
+	// +optional
+	AvailableReplicas int32 `json:"availableReplicas,omitempty"`
+	// +listType=map
+	// +listMapKey=type
+	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

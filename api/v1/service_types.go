@@ -21,12 +21,33 @@ type Source struct {
 	// +required
 	Repo string `json:"repo"`
 
-	// +kubebuilder:default=main
+	// Revision is a branch, tag or full commit SHA. Empty means the
+	// repository's default branch (remote HEAD).
+	// +kubebuilder:validation:MaxLength=250
+	// +kubebuilder:validation:Pattern=`^([A-Za-z0-9._/][A-Za-z0-9._/-]*)?$`
 	// +optional
 	Revision string `json:"revision,omitempty"`
 
 	// +optional
 	SecretRef *corev1.SecretKeySelector `json:"secretRef,omitempty"`
+}
+
+// ImageSpec says where the built image is pushed.
+type ImageSpec struct {
+	// Registry host, e.g. ghcr.io. Defaults to the operator's
+	// --default-registry.
+	// +optional
+	Registry string `json:"registry,omitempty"`
+
+	// Repo is the image repository inside the registry. Defaults to the
+	// Service name.
+	// +optional
+	Repo string `json:"repo,omitempty"`
+
+	// CredentialsSecret names a kubernetes.io/dockerconfigjson Secret used
+	// to push the image and, on the Deployment, to pull it.
+	// +optional
+	CredentialsSecret string `json:"credentialsSecret,omitempty"`
 }
 
 type ServiceSpec struct {
@@ -35,6 +56,19 @@ type ServiceSpec struct {
 
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// +optional
+	Image *ImageSpec `json:"image,omitempty"`
+
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Replicas *int32 `json:"replicas,omitempty"`
+
+	// Port the application listens on; also exported as $PORT.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int32 `json:"port,omitempty"`
 }
 
 type ServiceStatus struct {
@@ -61,6 +95,14 @@ type ServiceStatus struct {
 	// +optional
 	CDRef string `json:"cdRef,omitempty"`
 
+	// DockerfileConfigMap holds the Dockerfile CI builds with.
+	// +optional
+	DockerfileConfigMap string `json:"dockerfileConfigMap,omitempty"`
+
+	// ObservedGeneration is the spec generation the last discovery used.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// +optional
 	Error string `json:"error,omitempty"`
 
@@ -74,6 +116,7 @@ type ServiceStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:shortName=ksvc
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Language",type=string,JSONPath=`.status.serviceType`

@@ -2,8 +2,8 @@ import { Badge, KoptanPage, SampleNote } from '@internal/plugin-koptan-react';
 
 const ROWS = [
   {
-    resource: 'payment-voyage',
-    kind: 'Voyage',
+    resource: 'payment-cd',
+    kind: 'CD',
     findings: [
       ['1 CRITICAL', 'error'],
       ['3 MEDIUM', 'warning'],
@@ -11,8 +11,8 @@ const ROWS = [
     status: 'At Risk',
   },
   {
-    resource: 'auth-voyage',
-    kind: 'Voyage',
+    resource: 'auth-cd',
+    kind: 'CD',
     findings: [['NONE', 'success']] as const,
     status: 'Secure',
   },

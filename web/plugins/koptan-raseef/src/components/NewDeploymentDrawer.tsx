@@ -84,9 +84,15 @@ export const NewDeploymentDrawer = ({
   const [name, setName] = useState('');
   const [namespace, setNamespace] = useState('default');
   const [repo, setRepo] = useState('');
-  const [revision, setRevision] = useState('main');
+  const [revision, setRevision] = useState('');
   const [token, setToken] = useState('');
   const [env, setEnv] = useState<[string, string][]>([]);
+  const [registry, setRegistry] = useState('');
+  const [imageRepo, setImageRepo] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [replicas, setReplicas] = useState('1');
+  const [port, setPort] = useState('8080');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -94,16 +100,29 @@ export const NewDeploymentDrawer = ({
     e.preventDefault();
     setBusy(true);
     setError(undefined);
-    const vars = env.filter(([k]) => k);
+    if (env.some(([k, v]) => !k.trim() && v)) {
+      setError('Every environment variable needs a name.');
+      setBusy(false);
+      return;
+    }
+    const vars = env.filter(([k]) => k.trim());
+    const image = {
+      ...(registry ? { registry: registry.trim() } : {}),
+      ...(imageRepo ? { repo: imageRepo.trim() } : {}),
+      ...(username ? { username, password } : {}),
+    };
     const req: CreatePipelineRequest = {
-      name,
-      namespace,
-      repo,
-      revision,
+      name: name.trim(),
+      namespace: namespace.trim(),
+      repo: repo.trim(),
+      ...(revision.trim() ? { revision: revision.trim() } : {}),
       ...(token ? { token } : {}),
       ...(vars.length
-        ? { env: vars.map(([k, v]) => ({ name: k, value: v })) }
+        ? { env: vars.map(([k, v]) => ({ name: k.trim(), value: v })) }
         : {}),
+      ...(Object.keys(image).length ? { image } : {}),
+      replicas: Number(replicas),
+      port: Number(port),
     };
     try {
       await createPipeline(req);
@@ -186,7 +205,7 @@ export const NewDeploymentDrawer = ({
                   aria-label="Revision"
                   value={revision}
                   onChange={(e) => setRevision(e.target.value)}
-                  placeholder="main"
+                  placeholder="default branch"
                 />
               </Field>
               <Field label="Access token (private repos)">
@@ -204,6 +223,80 @@ export const NewDeploymentDrawer = ({
             <Field label="Environment variables" group>
               <EnvEditor rows={env} onChange={setEnv} />
             </Field>
+          </div>
+
+          <div className="mz-form-section">
+            <h2>
+              <Icon name="precision_manufacturing" /> Build &amp; deploy
+            </h2>
+            <div className="mz-grid-2">
+              <Field label="Registry">
+                <input
+                  className="mz-input"
+                  aria-label="Registry"
+                  value={registry}
+                  onChange={(e) => setRegistry(e.target.value)}
+                  placeholder="operator default"
+                />
+              </Field>
+              <Field label="Image repository">
+                <input
+                  className="mz-input"
+                  aria-label="Image repository"
+                  value={imageRepo}
+                  onChange={(e) => setImageRepo(e.target.value)}
+                  placeholder={name || 'service name'}
+                />
+              </Field>
+            </div>
+            <div className="mz-grid-2">
+              <Field label="Registry username">
+                <input
+                  className="mz-input"
+                  aria-label="Registry username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label="Registry password / token">
+                <input
+                  className="mz-input"
+                  aria-label="Registry password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  autoComplete="off"
+                />
+              </Field>
+            </div>
+            <div className="mz-grid-2">
+              <Field label="Replicas">
+                <input
+                  className="mz-input"
+                  aria-label="Replicas"
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={replicas}
+                  onChange={(e) => setReplicas(e.target.value)}
+                  required
+                />
+              </Field>
+              <Field label="Container port">
+                <input
+                  className="mz-input"
+                  aria-label="Port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                  required
+                />
+              </Field>
+            </div>
           </div>
 
           <div className="mz-form-actions">

@@ -1,6 +1,4 @@
 resources:
-  - bases/koptan.felukka.org_voyages.yaml
-  - bases/koptan.felukka.org_slipways.yaml
-  - bases/koptan.felukka.org_goapps.yaml
-  - bases/koptan.felukka.org_dotnetapps.yaml
-  - bases/koptan.felukka.org_javaapps.yaml
+  - bases/koptan.felukka.org_services.yaml
+  - bases/koptan.felukka.org_cis.yaml
+  - bases/koptan.felukka.org_cds.yaml

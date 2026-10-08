@@ -87,7 +87,10 @@ const CICard = ({ ci }: { ci?: Pipeline['ci'] }) => (
           <Phase phase={ci.status?.phase} />
         </div>
         <Field label="Pipeline ID">{ci.metadata.name}</Field>
-        <Field label="Artifact Path">{ci.status?.latestImage ?? '—'}</Field>
+        <Field label="Target">
+          {ci.spec.image.registry}/{ci.spec.image.repo}
+        </Field>
+        <Field label="Last Image">{ci.status?.latestImage ?? '—'}</Field>
         <Field label="Builds">{ci.status?.buildCount ?? 0}</Field>
         {progress(ci.status?.phase) !== undefined && (
           <div className="mz-bar">
@@ -117,6 +120,7 @@ const CDCard = ({ pipeline }: { pipeline: Pipeline }) => {
   const phase = cd?.status?.phase;
   const active = phaseTone(phase) === 'ok';
   const target = cd?.spec.replicas ?? 1;
+  const ready = cd?.status?.availableReplicas ?? 0;
   return (
     <div
       className={`mz-card${cd ? (active ? ' mz-card--active' : '') : ' mz-card--faded'}`}
@@ -146,13 +150,13 @@ const CDCard = ({ pipeline }: { pipeline: Pipeline }) => {
               {endpoint(pipeline)}
             </span>
           </Field>
-          <Field label="Target Replicas">
+          <Field label={`Replicas: ${ready} ready of ${target}`}>
             <div className="mz-replicas">
               {Array.from({ length: target }, (_, i) => (
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: replica slots are positional
                   key={i}
-                  className={`mz-replica${phase === 'Running' ? ' mz-replica--on' : ''}`}
+                  className={`mz-replica${i < ready ? ' mz-replica--on' : ''}`}
                 />
               ))}
             </div>

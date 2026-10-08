@@ -33,6 +33,13 @@ type RegistrySpec struct {
 	// +required
 	Repo string `json:"repo"`
 
+	// CredentialsSecret names a kubernetes.io/dockerconfigjson Secret used
+	// to push (and pull) the image.
+	// +optional
+	CredentialsSecret string `json:"credentialsSecret,omitempty"`
+
+	// Deprecated: use CredentialsSecret. When set, the operator converts it
+	// into a dockerconfigjson Secret named <ci>-registry.
 	// +optional
 	Creds *LoginSecret `json:"loginSecret,omitempty"`
 }
@@ -57,6 +64,14 @@ type CISpec struct {
 	// +required
 	Registry RegistrySpec `json:"image"`
 
+	// Revision is the commit SHA to build; the Service controller sets it.
+	// +optional
+	Revision string `json:"revision,omitempty"`
+
+	// DockerfileConfigMap holds the Dockerfile (key "Dockerfile").
+	// +optional
+	DockerfileConfigMap string `json:"dockerfileConfigMap,omitempty"`
+
 	// +optional
 	ExtraSteps []corev1.Container `json:"extraSteps,omitempty"`
 }
@@ -69,6 +84,15 @@ type CIStatus struct {
 	BuildCount int64        `json:"buildCount,omitempty"`
 	BuildTime  *metav1.Time `json:"lastBuildTime,omitempty"`
 	Message    string       `json:"message,omitempty"`
+	// BuildPod is the Pod running (or that ran) the latest build.
+	// +optional
+	BuildPod string `json:"buildPod,omitempty"`
+	// BuildingRevision is the revision of the build in BuildPod.
+	// +optional
+	BuildingRevision string `json:"buildingRevision,omitempty"`
+	// ObservedGeneration is the spec generation of the latest build.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// +listType=map
 	// +listMapKey=type
 	// +optional

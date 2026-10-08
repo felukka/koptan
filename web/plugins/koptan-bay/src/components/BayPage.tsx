@@ -10,6 +10,7 @@ import {
   Icon,
   KoptanPage,
   Phase,
+  pipelinePhase,
   Section,
   kindVariant,
   useKoptanApi,
@@ -67,9 +68,12 @@ const MetricsBar = ({
           {cluster && !cluster.error ? cluster.nodes.ready : '—'}
           <Dim>/ {cluster && !cluster.error ? cluster.nodes.total : '—'}</Dim>
         </Metric>
-        <Metric label="Koptan Operator">
-          <span className="mz-dot mz-dot--warn" />
-          <span className="mz-muted">not reported</span>
+        <Metric label="Builds Running">
+          <span
+            className={`mz-dot ${overview.cis.byPhase.Building ? 'mz-dot--warn' : 'mz-dot--ok'}`}
+          />
+          {overview.cis.byPhase.Building ?? 0}
+          <Dim>/ {overview.cis.total}</Dim>
         </Metric>
         <Metric label="Kube API Version">
           <span
@@ -100,7 +104,7 @@ const Deployments = ({ pipelines }: { pipelines: Pipeline[] }) => (
           <tr>
             <th>Name</th>
             <th>Language</th>
-            <th>Replicas</th>
+            <th>Ready / Replicas</th>
             <th>Status</th>
             <th className="mz-right">Actions</th>
           </tr>
@@ -138,10 +142,12 @@ const Deployments = ({ pipelines }: { pipelines: Pipeline[] }) => (
                 )}
               </td>
               <td className="mz-mono">
-                {cd ? `${cd.spec.replicas ?? 1} target` : '—'}
+                {cd
+                  ? `${cd.status?.availableReplicas ?? 0} / ${cd.spec.replicas ?? 1}`
+                  : '—'}
               </td>
               <td>
-                <Phase phase={cd?.status?.phase ?? service.status?.phase} />
+                <Phase phase={pipelinePhase({ service, ci, cd })} />
               </td>
               <td className="mz-right">
                 <Link to="/raseef" className="mz-link-btn">
@@ -160,7 +166,10 @@ const ActivityLog = ({ entries }: { entries: ActivityEntry[] }) => (
   <Section icon={<Icon name="history_edu" />} title="Recent Activity Log">
     {entries.length === 0 && <span className="mz-muted">Nothing yet.</span>}
     {entries.map((e) => (
-      <div className="mz-log-row" key={`${e.kind}/${e.namespace}/${e.name}`}>
+      <div
+        className="mz-log-row"
+        key={`${e.time}/${e.kind}/${e.namespace}/${e.name}`}
+      >
         <div className="mz-log-time">{when(e.time)}</div>
         <span
           className={`mz-dot ${e.severity === 'error' ? 'mz-dot--bad' : e.severity === 'success' ? 'mz-dot--ok' : 'mz-dot--warn'}`}
@@ -203,12 +212,7 @@ export const BayPage = () => {
       <span className="mz-accent">
         {error
           ? 'Cluster unreachable.'
-          : value?.pipelines.some(
-                (p) =>
-                  p.cd?.status?.phase === 'Failed' ||
-                  p.ci?.status?.phase === 'Failed' ||
-                  p.service.status?.phase === 'Failed',
-              )
+          : value?.pipelines.some((p) => pipelinePhase(p) === 'Failed')
             ? 'Rough seas, something failed.'
             : 'Steady as she goes.'}
       </span>

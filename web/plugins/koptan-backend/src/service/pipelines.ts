@@ -1,13 +1,15 @@
-import type {
-  ActivityEntry,
-  CD,
-  CI,
-  CreatePipelineRequest,
-  Overview,
-  Pipeline,
-  Service,
+import {
+  type ActivityEntry,
+  type CD,
+  type CI,
+  type CreatePipelineRequest,
+  KOPTAN_GROUP,
+  KOPTAN_VERSION,
+  type Overview,
+  type Pipeline,
+  type Service,
 } from '@internal/plugin-koptan-common';
-import { ConflictError, NotAllowedError } from '@backstage/errors';
+import { ConflictError, InputError, NotAllowedError } from '@backstage/errors';
 import type { KoptanClient, RawResource } from './crdClient';
 
 const LAST_APPLIED = 'kubectl.kubernetes.io/last-applied-configuration';
@@ -116,47 +118,173 @@ export async function loadAll(client: KoptanClient, namespace?: string) {
 }
 
 const DNS_LABEL = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
+const SCP_URL = /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._/~-]+$/;
+const REVISION = /^[A-Za-z0-9._/][A-Za-z0-9._/-]*$/;
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const REGISTRY = /^[A-Za-z0-9.-]+(:[0-9]+)?(\/[A-Za-z0-9._-]+)*$/;
+const IMAGE_REPO =
+  /^[a-z0-9]+([._-][a-z0-9]+)*(\/[a-z0-9]+([._-][a-z0-9]+)*)*$/;
+
+/**
+ * Only remote git URLs: https, http, ssh, git, or user@host:path. Rejects
+ * local paths, file://, ext:: and anything git could read as an option.
+ * Mirrors ValidateGitURL in the operator (internal/utils/url.go).
+ */
+export function isValidRepoUrl(repo: string): boolean {
+  if (!repo || repo.startsWith('-') || /\s/.test(repo)) return false;
+  if (SCP_URL.test(repo)) return true;
+  try {
+    const u = new URL(repo);
+    return (
+      ['https:', 'http:', 'ssh:', 'git:'].includes(u.protocol) &&
+      !!u.hostname &&
+      u.pathname.length > 1
+    );
+  } catch {
+    return false;
+  }
+}
 
 export function validateCreate(req: CreatePipelineRequest): string | undefined {
   if (!DNS_LABEL.test(req.name ?? '')) return 'name must be a DNS-1123 label';
+  if (req.namespace !== undefined && !DNS_LABEL.test(req.namespace))
+    return 'namespace must be a DNS-1123 label';
   if (!req.repo) return 'repo is required';
+  if (!isValidRepoUrl(req.repo))
+    return 'repo must be an https://, http://, ssh:// or git:// URL, or user@host:path';
+  if (
+    req.revision &&
+    (req.revision.length > 250 ||
+      !REVISION.test(req.revision) ||
+      req.revision.includes('..'))
+  )
+    return 'revision must be a branch, tag or commit SHA';
   for (const e of req.env ?? []) {
-    if (!e.name) return 'env variables need a name';
+    if (!ENV_NAME.test(e.name ?? ''))
+      return `env variable name "${e.name ?? ''}" is not valid`;
   }
+  const img = req.image;
+  if (img) {
+    if (img.registry && !REGISTRY.test(img.registry))
+      return 'image.registry must be a registry host, e.g. ghcr.io';
+    if (img.repo && !IMAGE_REPO.test(img.repo))
+      return 'image.repo must be a lowercase image path, e.g. team/app';
+    if (!!img.username !== !!img.password)
+      return 'registry username and password must be set together';
+    if (img.username && !img.registry)
+      return 'set image.registry when giving registry credentials';
+  }
+  if (
+    req.replicas !== undefined &&
+    (!Number.isInteger(req.replicas) || req.replicas < 0 || req.replicas > 50)
+  )
+    return 'replicas must be a whole number from 0 to 50';
+  if (
+    req.port !== undefined &&
+    (!Number.isInteger(req.port) || req.port < 1 || req.port > 65535)
+  )
+    return 'port must be 1-65535';
   return undefined;
 }
 
-/** Creates the Service; the operator derives its CI and CD. */
+/** A .dockerconfigjson for one registry. */
+export function dockerConfigJson(
+  registry: string,
+  username: string,
+  password: string,
+): string {
+  const auth = Buffer.from(`${username}:${password}`).toString('base64');
+  return JSON.stringify({
+    auths: { [registry]: { username, password, auth } },
+  });
+}
+
+/**
+ * Creates the Service; the operator derives its CI and CD. Secrets come
+ * first so the operator can read them, are deleted again if the Service
+ * cannot be created, and are owned by the Service once it exists.
+ */
 export async function createPipeline(
   client: KoptanClient,
   req: CreatePipelineRequest,
   createdBy: string,
 ): Promise<Pipeline> {
   const namespace = req.namespace ?? 'default';
-  // The operator reads the git token from a Secret, so store it as one
-  // instead of putting it in the spec.
-  if (req.token) {
-    await client.createSecret(namespace, `${req.name}-git`, {
-      token: req.token,
-    });
-  }
-  const service = await client.create('Service', namespace, {
-    metadata: {
-      name: req.name,
-      namespace,
-      annotations: { 'koptan.felukka.org/created-by': createdBy },
-    },
-    spec: {
-      source: {
-        repo: req.repo,
-        ...(req.revision ? { revision: req.revision } : {}),
-        ...(req.token
-          ? { secretRef: { name: `${req.name}-git`, key: 'token' } }
-          : {}),
+  const created: string[] = [];
+  const rollback = async () => {
+    for (const name of created) {
+      await client.deleteSecret(namespace, name).catch(() => undefined);
+    }
+  };
+  const gitSecret = `${req.name}-git`;
+  const registrySecret = `${req.name}-registry`;
+  const img = req.image;
+
+  let service: RawResource;
+  try {
+    if (req.token) {
+      await client.createSecret(namespace, gitSecret, { token: req.token });
+      created.push(gitSecret);
+    }
+    if (img?.username && img.password && img.registry) {
+      await client.createSecret(
+        namespace,
+        registrySecret,
+        {
+          '.dockerconfigjson': dockerConfigJson(
+            img.registry,
+            img.username,
+            img.password,
+          ),
+        },
+        'kubernetes.io/dockerconfigjson',
+      );
+      created.push(registrySecret);
+    }
+    const image = {
+      ...(img?.registry ? { registry: img.registry } : {}),
+      ...(img?.repo ? { repo: img.repo } : {}),
+      ...(created.includes(registrySecret)
+        ? { credentialsSecret: registrySecret }
+        : {}),
+    };
+    service = await client.create('Service', namespace, {
+      metadata: {
+        name: req.name,
+        namespace,
+        annotations: { 'koptan.felukka.org/created-by': createdBy },
       },
-      ...(req.env?.length ? { env: req.env } : {}),
-    },
-  });
+      spec: {
+        source: {
+          repo: req.repo,
+          ...(req.revision ? { revision: req.revision } : {}),
+          ...(req.token
+            ? { secretRef: { name: gitSecret, key: 'token' } }
+            : {}),
+        },
+        ...(req.env?.length ? { env: req.env } : {}),
+        ...(Object.keys(image).length ? { image } : {}),
+        ...(req.replicas !== undefined ? { replicas: req.replicas } : {}),
+        ...(req.port !== undefined ? { port: req.port } : {}),
+      },
+    });
+  } catch (e) {
+    await rollback();
+    throw e;
+  }
+
+  const uid = service.metadata?.uid;
+  if (uid) {
+    const owner = {
+      apiVersion: `${KOPTAN_GROUP}/${KOPTAN_VERSION}`,
+      kind: 'Service',
+      name: req.name,
+      uid,
+    };
+    await Promise.all(
+      created.map((name) => client.setSecretOwner(namespace, name, owner)),
+    );
+  }
   return { service: redactService({ kind: 'Service', ...service }) };
 }
 
@@ -250,17 +378,37 @@ export function buildActivity(
 
 /** Turns Kubernetes API failures into short, readable errors. */
 export function friendlyError(e: unknown, req: CreatePipelineRequest): unknown {
-  const code = (e as { code?: number }).code;
+  const err = e as { code?: number; body?: unknown };
   const ns = req.namespace ?? 'default';
-  if (code === 409) {
+  const apiMessage = () => {
+    try {
+      const body =
+        typeof err.body === 'string' ? JSON.parse(err.body) : err.body;
+      return (body as { message?: string })?.message;
+    } catch {
+      return undefined;
+    }
+  };
+  if (err.code === 409) {
     return new ConflictError(
       `"${req.name}" already exists in namespace "${ns}" (a service or secret with that name)`,
     );
   }
-  if (code === 403) {
+  if (err.code === 403) {
     return new NotAllowedError(
       'The service account used by Backstage is not allowed to create these resources; see config/rbac/backstage_role.yaml',
     );
+  }
+  if (err.code === 404) {
+    const msg = apiMessage() ?? '';
+    return new InputError(
+      /namespaces? .* not found/.test(msg)
+        ? `Namespace "${ns}" does not exist`
+        : `Not found: ${msg || 'the Koptan CRDs may not be installed in this cluster'}`,
+    );
+  }
+  if (err.code === 422 || err.code === 400) {
+    return new InputError(apiMessage() ?? 'The cluster rejected the request');
   }
   return e;
 }

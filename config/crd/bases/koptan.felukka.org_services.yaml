@@ -11,6 +11,8 @@ spec:
     kind: Service
     listKind: ServiceList
     plural: services
+    shortNames:
+    - ksvc
     singular: service
   scope: Namespaced
   versions:
@@ -216,13 +218,46 @@ spec:
                   - name
                   type: object
                 type: array
+              image:
+                description: ImageSpec says where the built image is pushed.
+                properties:
+                  credentialsSecret:
+                    description: |-
+                      CredentialsSecret names a kubernetes.io/dockerconfigjson Secret used
+                      to push the image and, on the Deployment, to pull it.
+                    type: string
+                  registry:
+                    description: |-
+                      Registry host, e.g. ghcr.io. Defaults to the operator's
+                      --default-registry.
+                    type: string
+                  repo:
+                    description: |-
+                      Repo is the image repository inside the registry. Defaults to the
+                      Service name.
+                    type: string
+                type: object
+              port:
+                description: Port the application listens on; also exported as $PORT.
+                format: int32
+                maximum: 65535
+                minimum: 1
+                type: integer
+              replicas:
+                format: int32
+                minimum: 0
+                type: integer
               source:
                 properties:
                   repo:
                     minLength: 1
                     type: string
                   revision:
-                    default: main
+                    description: |-
+                      Revision is a branch, tag or full commit SHA. Empty means the
+                      repository's default branch (remote HEAD).
+                    maxLength: 250
+                    pattern: ^([A-Za-z0-9._/][A-Za-z0-9._/-]*)?$
                     type: string
                   secretRef:
                     description: SecretKeySelector selects a key of a Secret.
@@ -323,6 +358,9 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              dockerfileConfigMap:
+                description: DockerfileConfigMap holds the Dockerfile CI builds with.
+                type: string
               error:
                 type: string
               lastPushDetected:
@@ -336,6 +374,11 @@ spec:
                 type: string
               message:
                 type: string
+              observedGeneration:
+                description: ObservedGeneration is the spec generation the last discovery
+                  used.
+                format: int64
+                type: integer
               phase:
                 enum:
                 - Pending

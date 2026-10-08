@@ -26,3 +26,24 @@ export const Phase = ({ phase }: { phase?: string }) => {
     </span>
   );
 };
+
+type Staged = { status?: { phase?: string } } | undefined;
+
+/**
+ * One status for a Service -> CI -> CD chain: Failed if any stage failed,
+ * Running once the CD runs, otherwise the first stage that is not done.
+ */
+export const pipelinePhase = (p: {
+  service: Staged;
+  ci?: Staged;
+  cd?: Staged;
+}): string => {
+  const s = p.service?.status?.phase;
+  const c = p.ci?.status?.phase;
+  const d = p.cd?.status?.phase;
+  if ([s, c, d].includes('Failed')) return 'Failed';
+  if (s !== 'Ready') return s ?? 'Pending';
+  if (d === 'Running') return 'Running';
+  if (c !== 'Succeeded') return c ?? 'Waiting';
+  return d ?? 'Waiting';
+};

@@ -1,6 +1,3 @@
-// Package controller provides the CI (Continuous Integration) reconciler
-// for the koptan operator. It builds container images from Service sources
-// and creates CD CRDs on success.
 package controller
 
 import (
@@ -9,8 +6,9 @@ import (
 	"time"
 
 	koptanv1 "github.com/felukka/koptan/api/v1"
-	"github.com/felukka/koptan/internal/ci"
-	"k8s.io/apimachinery/pkg/api/errors"
+	"github.com/felukka/koptan/internal/utils"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,23 +22,21 @@ import (
 
 const (
 	ciFinalizer = "felukka.org/ci-cleanup"
+	// buildPollInterval is how often a running build Pod is checked; Pod
+	// events also trigger a reconcile.
+	buildPollInterval = 15 * time.Second
 )
 
-// CIReconciler reconciles a CI object by building a container image
-// from the referenced Service and creating a CD CRD on success.
+// CIReconciler builds the image for a Service in a build Pod (git clone +
+// buildah), then creates or updates the CD that deploys it.
 type CIReconciler struct {
 	client.Client
-	Scheme  *runtime.Scheme
-	Builder ci.Builder
+	Scheme *runtime.Scheme
 }
 
-// NewCIReconciler creates a CIReconciler with the default BuildahBuilder.
+// NewCIReconciler returns a CIReconciler.
 func NewCIReconciler(c client.Client, s *runtime.Scheme) *CIReconciler {
-	return &CIReconciler{
-		Client:  c,
-		Scheme:  s,
-		Builder: &ci.BuildahBuilder{},
-	}
+	return &CIReconciler{Client: c, Scheme: s}
 }
 
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis,verbs=get;list;watch;create;update;patch;delete
@@ -48,223 +44,248 @@ func NewCIReconciler(c client.Client, s *runtime.Scheme) *CIReconciler {
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis/finalizers,verbs=update
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=services,verbs=get;list;watch
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cds,verbs=get;list;watch;create;update;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 
-// Reconcile implements the CI reconciliation loop.
-// Lifecycle: Idle -> Building (runs builder) -> Succeeded (creates CD).
+// Reconcile builds spec.revision once per revision and spec generation.
+// A failed build is not retried until the revision or the spec changes.
 func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	var ciObj koptanv1.CI
-	if err := r.Get(ctx, req.NamespacedName, &ciObj); err != nil {
+	var ci koptanv1.CI
+	if err := r.Get(ctx, req.NamespacedName, &ci); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// --- Deletion handling ---
-	if !ciObj.DeletionTimestamp.IsZero() {
-		if controllerutil.ContainsFinalizer(&ciObj, ciFinalizer) {
-			controllerutil.RemoveFinalizer(&ciObj, ciFinalizer)
-			return ctrl.Result{}, r.Update(ctx, &ciObj)
+	if !ci.DeletionTimestamp.IsZero() {
+		if controllerutil.ContainsFinalizer(&ci, ciFinalizer) {
+			controllerutil.RemoveFinalizer(&ci, ciFinalizer)
+			return ctrl.Result{}, r.Update(ctx, &ci)
 		}
 		return ctrl.Result{}, nil
 	}
-
-	// --- Add finalizer ---
-	if !controllerutil.ContainsFinalizer(&ciObj, ciFinalizer) {
-		controllerutil.AddFinalizer(&ciObj, ciFinalizer)
-		if err := r.Update(ctx, &ciObj); err != nil {
+	if !controllerutil.ContainsFinalizer(&ci, ciFinalizer) {
+		controllerutil.AddFinalizer(&ci, ciFinalizer)
+		if err := r.Update(ctx, &ci); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// --- Skip if already succeeded ---
-	if ciObj.Status.Phase == koptanv1.CIPhaseSucceeded && ciObj.Status.Image != "" {
+	orig := ci.DeepCopy()
+	svc, err := r.resolveService(ctx, &ci)
+	if err != nil {
+		setCIPhase(&ci, koptanv1.CIPhaseIdle, fmt.Sprintf("Waiting for Service %q: %v", ci.Spec.Service.Name, err))
+		return ctrl.Result{RequeueAfter: time.Minute}, r.patchStatus(ctx, orig, &ci)
+	}
+	sha := ci.Spec.Revision
+	if sha == "" || ci.Spec.DockerfileConfigMap == "" {
+		setCIPhase(&ci, koptanv1.CIPhaseIdle, fmt.Sprintf("Waiting for Service %q to finish discovery", svc.Name))
+		return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
+	}
+	if err := validateBuild(&ci, svc); err != nil {
+		r.markCIFailed(&ci, "InvalidSpec", err.Error())
+		ci.Status.BuildingRevision = sha
+		return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
+	}
+
+	image := imageRef(&ci, sha)
+	current := ci.Status.BuildingRevision == sha && ci.Status.ObservedGeneration == ci.Generation
+
+	// --- A build for this revision and spec is known: follow it. ---
+	if current && ci.Status.BuildPod != "" && ci.Status.Phase == koptanv1.CIPhaseBuilding {
+		var pod corev1.Pod
+		err := r.Get(ctx, types.NamespacedName{Name: ci.Status.BuildPod, Namespace: ci.Namespace}, &pod)
+		if apierrors.IsNotFound(err) {
+			r.markCIFailed(&ci, "BuildPodLost", fmt.Sprintf("build pod %s disappeared", ci.Status.BuildPod))
+			return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
+		}
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		phase, msg, done := podResult(&pod)
+		if !done {
+			setCIPhase(&ci, koptanv1.CIPhaseBuilding, msg)
+			return ctrl.Result{RequeueAfter: buildPollInterval}, r.patchStatus(ctx, orig, &ci)
+		}
+		if phase == koptanv1.CIPhaseFailed {
+			log.Info("build failed", "pod", pod.Name, "reason", msg)
+			r.markCIFailed(&ci, "BuildFailed", msg)
+			return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
+		}
+		log.Info("build succeeded", "image", image)
+		now := metav1.Now()
+		ci.Status.Phase = koptanv1.CIPhaseSucceeded
+		ci.Status.Image = image
+		ci.Status.Revision = sha
+		ci.Status.BuildTime = &now
+		ci.Status.BuildCount++
+		ci.Status.Message = "build succeeded"
+		meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
+			Type: "BuildSucceeded", Status: metav1.ConditionTrue, Reason: "BuildCompleted",
+			Message: fmt.Sprintf("Image %s", image),
+		})
+		meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
+			Type: "Ready", Status: metav1.ConditionTrue, Reason: "Succeeded", Message: "build succeeded",
+		})
+		if err := r.patchStatus(ctx, orig, &ci); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, r.ensureCD(ctx, &ci, svc)
+	}
+
+	// --- Up to date, or failed for this exact revision and spec: nothing to build. ---
+	if current && (ci.Status.Phase == koptanv1.CIPhaseSucceeded || ci.Status.Phase == koptanv1.CIPhaseFailed) {
+		if ci.Status.Phase == koptanv1.CIPhaseSucceeded {
+			return ctrl.Result{}, r.ensureCD(ctx, &ci, svc)
+		}
 		return ctrl.Result{}, nil
 	}
 
-	// --- Skip if currently building ---
-	if ciObj.Status.Phase == koptanv1.CIPhaseBuilding {
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
-	// --- Resolve the Service ---
-	svc, err := r.resolveService(ctx, &ciObj)
+	// --- Start a new build. ---
+	setCIPhase(&ci, koptanv1.CIPhaseResolving, fmt.Sprintf("Preparing build of %s", short(sha)))
+	dockerCfg, err := r.registrySecret(ctx, &ci)
 	if err != nil {
-		r.setCIFailed(ctx, &ciObj, "ServiceResolveFailed", fmt.Sprintf("resolve service: %v", err))
+		r.markCIFailed(&ci, "RegistryCredentials", err.Error())
+		ci.Status.BuildingRevision = sha
+		ci.Status.ObservedGeneration = ci.Generation
+		return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
+	}
+	if err := r.deleteBuildPods(ctx, &ci); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	// --- Wait for Service to be Ready ---
-	if svc.Status.Phase != koptanv1.ServicePhaseReady {
-		msg := fmt.Sprintf("Waiting for Service %q to be ready (current phase: %s)",
-			svc.Name, svc.Status.Phase)
-		setCIPhase(&ciObj, koptanv1.CIPhaseIdle, msg)
-		if err := r.patchStatus(ctx, &ciObj); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
-	// --- Phase: Building ---
-	log.Info("starting build", "service", svc.Name, "image", ciObj.Spec.Registry.Repo)
-	setCIPhase(&ciObj, koptanv1.CIPhaseBuilding, "Build in progress")
-	if err := r.patchStatus(ctx, &ciObj); err != nil {
+	pod := buildPod(&ci, svc, sha, image, dockerCfg)
+	if err := controllerutil.SetControllerReference(&ci, pod, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	// Run the builder.
-	imageRef, err := r.Builder.Build(ctx, &ciObj, svc)
-	if err != nil {
-		r.setCIFailed(ctx, &ciObj, "BuildFailed", fmt.Sprintf("build: %v", err))
-		return ctrl.Result{}, err
+	if err := r.Create(ctx, pod); err != nil {
+		return ctrl.Result{}, fmt.Errorf("create build pod: %w", err)
 	}
-
-	log.Info("build succeeded", "image", imageRef)
-	ciObj.Status.Phase = koptanv1.CIPhaseSucceeded
-	ciObj.Status.Image = imageRef
-	ciObj.Status.Message = "build succeeded"
-	now := metav1.Now()
-	ciObj.Status.BuildTime = &now
-	ciObj.Status.BuildCount++
-	ciObj.Status.Revision = svc.Spec.Source.Revision
-
-	meta.SetStatusCondition(&ciObj.Status.Conditions, metav1.Condition{
-		Type:               "BuildSucceeded",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "BuildCompleted",
-		Message:            fmt.Sprintf("Image %s", imageRef),
-	})
-
-	if err := r.patchStatus(ctx, &ciObj); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// --- Create CD CRD ---
-	if err := r.createCD(ctx, &ciObj, svc, imageRef); err != nil {
-		log.Error(err, "failed to create CD CRD")
-	}
-
-	return ctrl.Result{}, nil
+	log.Info("starting build", "service", svc.Name, "image", image, "pod", pod.Name)
+	ci.Status.BuildPod = pod.Name
+	ci.Status.BuildingRevision = sha
+	ci.Status.ObservedGeneration = ci.Generation
+	setCIPhase(&ci, koptanv1.CIPhaseBuilding, fmt.Sprintf("Building %s in pod %s", image, pod.Name))
+	return ctrl.Result{RequeueAfter: buildPollInterval}, r.patchStatus(ctx, orig, &ci)
 }
 
-// resolveService fetches the Service referenced by this CI CRD.
-func (r *CIReconciler) resolveService(ctx context.Context, ciObj *koptanv1.CI) (*koptanv1.Service, error) {
-	svc := &koptanv1.Service{}
-	key := types.NamespacedName{
-		Name:      ciObj.Spec.Service.Name,
-		Namespace: ciObj.Namespace,
+func validateBuild(ci *koptanv1.CI, svc *koptanv1.Service) error {
+	if err := utils.ValidateGitURL(svc.Spec.Source.Repo); err != nil {
+		return err
 	}
+	if !utils.IsSHA(ci.Spec.Revision) {
+		return fmt.Errorf("spec.revision must be a full commit SHA, got %q", ci.Spec.Revision)
+	}
+	if ci.Spec.Registry.Registry == "" || ci.Spec.Registry.Repo == "" {
+		return fmt.Errorf("spec.image.registry and spec.image.repo are required")
+	}
+	return nil
+}
+
+// registrySecret returns the dockerconfigjson Secret used to push: the
+// credentialsSecret, or one generated from the deprecated loginSecret.
+func (r *CIReconciler) registrySecret(ctx context.Context, ci *koptanv1.CI) (string, error) {
+	if name := ci.Spec.Registry.CredentialsSecret; name != "" {
+		var s corev1.Secret
+		if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: ci.Namespace}, &s); err != nil {
+			return "", fmt.Errorf("registry credentials secret %q: %w", name, err)
+		}
+		if _, ok := s.Data[corev1.DockerConfigJsonKey]; !ok {
+			return "", fmt.Errorf("secret %q has no %s key (type kubernetes.io/dockerconfigjson expected)",
+				name, corev1.DockerConfigJsonKey)
+		}
+		return name, nil
+	}
+	creds := ci.Spec.Registry.Creds
+	if creds == nil {
+		return "", nil
+	}
+	cfg, err := buildDockerConfigJSON(ci.Spec.Registry.Registry, creds.Username, string(creds.Password))
+	if err != nil {
+		return "", err
+	}
+	s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: ci.Name + "-registry", Namespace: ci.Namespace}}
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, s, func() error {
+		s.Type = corev1.SecretTypeDockerConfigJson
+		s.Data = map[string][]byte{corev1.DockerConfigJsonKey: cfg}
+		return controllerutil.SetControllerReference(ci, s, r.Scheme)
+	})
+	return s.Name, err
+}
+
+// deleteBuildPods removes earlier build Pods of this CI.
+func (r *CIReconciler) deleteBuildPods(ctx context.Context, ci *koptanv1.CI) error {
+	return client.IgnoreNotFound(r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(ci.Namespace),
+		client.MatchingLabels{labelCI: ci.Name}, client.PropagationPolicy(metav1.DeletePropagationBackground)))
+}
+
+func (r *CIReconciler) resolveService(ctx context.Context, ci *koptanv1.CI) (*koptanv1.Service, error) {
+	svc := &koptanv1.Service{}
+	key := types.NamespacedName{Name: ci.Spec.Service.Name, Namespace: ci.Namespace}
 	if err := r.Get(ctx, key, svc); err != nil {
-		return nil, fmt.Errorf("get service %q: %w", key, err)
+		return nil, err
 	}
 	return svc, nil
 }
 
-// createCD creates a CD CRD that deploys the built image.
-func (r *CIReconciler) createCD(ctx context.Context, ciObj *koptanv1.CI, svc *koptanv1.Service, imageRef string) error {
-	// Check if CD already exists for this service.
-	cdName := fmt.Sprintf("%s-cd", svc.Name)
-	var existingCD koptanv1.CD
-	err := r.Get(ctx, types.NamespacedName{Name: cdName, Namespace: ciObj.Namespace}, &existingCD)
-	if err == nil {
-		// CD already exists — update the image reference if changed.
-		if existingCD.Status.Image != imageRef {
-			existingCD.Status.Image = imageRef
-			existingCD.Status.Revision = svc.Spec.Source.Revision
-			existingCD.Status.Message = "waiting for deployment"
-			if existingCD.Status.Conditions == nil {
-				existingCD.Status.Conditions = []metav1.Condition{}
-			}
-			meta.SetStatusCondition(&existingCD.Status.Conditions, metav1.Condition{
-				Type:               "Ready",
-				Status:             metav1.ConditionUnknown,
-				LastTransitionTime: metav1.Now(),
-				Reason:             "ImageUpdated",
-				Message:            "New image available",
-			})
-			if err := r.Status().Update(ctx, &existingCD); err != nil {
-				return fmt.Errorf("update CD status: %w", err)
-			}
+// ensureCD creates or updates <service>-cd for the built image.
+func (r *CIReconciler) ensureCD(ctx context.Context, ci *koptanv1.CI, svc *koptanv1.Service) error {
+	cd := &koptanv1.CD{ObjectMeta: metav1.ObjectMeta{Name: svc.Name + "-cd", Namespace: ci.Namespace}}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, cd, func() error {
+		if cd.Labels == nil {
+			cd.Labels = map[string]string{}
 		}
-		return nil
-	}
-
-	if !errors.IsNotFound(err) {
-		return fmt.Errorf("check existing CD: %w", err)
-	}
-
-	cd := &koptanv1.CD{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cdName,
-			Namespace: ciObj.Namespace,
-			Labels: map[string]string{
-				"koptan.felukka.org/service": svc.Name,
-				"koptan.felukka.org/ci":      ciObj.Name,
-			},
-		},
-		Spec: koptanv1.CDSpec{
-			CI: koptanv1.NamespacedObjectReference{
-				Name: ciObj.Name,
-			},
-			Replicas: 1,
-			Env:      svc.Spec.Env,
-			Resources: &koptanv1.Resources{
+		cd.Labels[labelService] = svc.Name
+		cd.Labels[labelCI] = ci.Name
+		cd.Spec.CI.Name = ci.Name
+		cd.Spec.ImagePullSecret = ci.Spec.Registry.CredentialsSecret
+		if cd.Spec.ImagePullSecret == "" && ci.Spec.Registry.Creds != nil {
+			cd.Spec.ImagePullSecret = ci.Name + "-registry"
+		}
+		applyServiceToCD(svc, cd)
+		if cd.Spec.Resources == nil {
+			cd.Spec.Resources = &koptanv1.Resources{
 				CPURequest:    ptrQ("100m"),
 				CPULimit:      ptrQ("500m"),
 				MemoryRequest: ptrQ("128Mi"),
 				MemoryLimit:   ptrQ("256Mi"),
-			},
-		},
-	}
-
-	if err := controllerutil.SetControllerReference(ciObj, cd, r.Scheme); err != nil {
-		return fmt.Errorf("set controller ref on CD: %w", err)
-	}
-
-	return r.Create(ctx, cd)
+			}
+		}
+		if metav1.GetControllerOf(cd) == nil {
+			return controllerutil.SetControllerReference(ci, cd, r.Scheme)
+		}
+		return nil
+	})
+	return err
 }
 
-// patchStatus patches the CI status with the latest conditions.
-func (r *CIReconciler) patchStatus(ctx context.Context, ciObj *koptanv1.CI) error {
-	return r.Status().Update(ctx, ciObj)
+func (r *CIReconciler) patchStatus(ctx context.Context, orig, ci *koptanv1.CI) error {
+	return r.Status().Patch(ctx, ci, client.MergeFrom(orig))
 }
 
-// setCIPhase sets the CI phase and message.
-func setCIPhase(ciObj *koptanv1.CI, phase koptanv1.CIPhase, message string) {
-	ciObj.Status.Phase = phase
-	ciObj.Status.Message = message
-	if ciObj.Status.Conditions == nil {
-		ciObj.Status.Conditions = []metav1.Condition{}
-	}
-	meta.SetStatusCondition(&ciObj.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionUnknown,
-		LastTransitionTime: metav1.Now(),
-		Reason:             string(phase),
-		Message:            message,
+func setCIPhase(ci *koptanv1.CI, phase koptanv1.CIPhase, message string) {
+	ci.Status.Phase = phase
+	ci.Status.Message = message
+	meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionUnknown,
+		Reason:  string(phase),
+		Message: message,
 	})
 }
 
-// setCIFailed marks the CI as Failed.
-func (r *CIReconciler) setCIFailed(ctx context.Context, ciObj *koptanv1.CI, reason, msg string) {
-	ciObj.Status.Phase = koptanv1.CIPhaseFailed
-	ciObj.Status.Message = msg
-	if ciObj.Status.Conditions == nil {
-		ciObj.Status.Conditions = []metav1.Condition{}
-	}
-	meta.SetStatusCondition(&ciObj.Status.Conditions, metav1.Condition{
-		Type:               "BuildSucceeded",
-		Status:             metav1.ConditionFalse,
-		LastTransitionTime: metav1.Now(),
-		Reason:             reason,
-		Message:            msg,
+func (r *CIReconciler) markCIFailed(ci *koptanv1.CI, reason, msg string) {
+	ci.Status.Phase = koptanv1.CIPhaseFailed
+	ci.Status.Message = msg
+	ci.Status.ObservedGeneration = ci.Generation
+	meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
+		Type: "BuildSucceeded", Status: metav1.ConditionFalse, Reason: reason, Message: msg,
 	})
-	_ = r.patchStatus(ctx, ciObj)
+	meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
+		Type: "Ready", Status: metav1.ConditionFalse, Reason: reason, Message: msg,
+	})
 }
 
-// ptrQ is a helper to create a pointer to a resource.Quantity.
 func ptrQ(s string) *resource.Quantity {
 	q := resource.MustParse(s)
 	return &q
@@ -274,6 +295,7 @@ func ptrQ(s string) *resource.Quantity {
 func (r *CIReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&koptanv1.CI{}).
+		Owns(&corev1.Pod{}).
 		Owns(&koptanv1.CD{}).
 		Named("ci").
 		Complete(r)

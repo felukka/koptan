@@ -40,6 +40,7 @@ func main() {
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
 	var tlsOpts []func(*tls.Config)
+	var defaultRegistry string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -52,6 +53,8 @@ func main() {
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "", "Metrics certificate directory.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "Metrics certificate file name.")
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "Metrics certificate key file name.")
+	flag.StringVar(&defaultRegistry, "default-registry", envOr("KOPTAN_DEFAULT_REGISTRY", "docker.io"),
+		"Registry used when a Service sets no spec.image.registry (env KOPTAN_DEFAULT_REGISTRY).")
 
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
@@ -99,8 +102,9 @@ func main() {
 	}
 
 	if err := (&controller.ServiceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		DefaultRegistry: defaultRegistry,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)
@@ -135,4 +139,12 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// envOr returns the environment variable key, or fallback when it is unset.
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

@@ -56,6 +56,9 @@ export interface Service {
   spec: {
     source: SourceRef;
     env?: EnvVar[];
+    image?: { registry?: string; repo?: string; credentialsSecret?: string };
+    replicas?: number;
+    port?: number;
   };
   status?: {
     phase?: ServicePhase;
@@ -65,6 +68,8 @@ export interface Service {
     lastPushDetected?: string;
     ciRef?: string;
     cdRef?: string;
+    dockerfileConfigMap?: string;
+    observedGeneration?: number;
     error?: string;
     message?: string;
     conditions?: Condition[];
@@ -77,7 +82,9 @@ export interface CI {
   spec: {
     service: { name: string };
     /** Registry login is stripped by the backend. */
-    image: { registry: string; repo: string };
+    image: { registry: string; repo: string; credentialsSecret?: string };
+    /** Commit SHA to build. */
+    revision?: string;
   };
   status?: {
     phase?: CIPhase;
@@ -85,6 +92,8 @@ export interface CI {
     latestImage?: string;
     buildCount?: number;
     lastBuildTime?: string;
+    buildPod?: string;
+    buildingRevision?: string;
     message?: string;
     conditions?: Condition[];
   };
@@ -103,11 +112,14 @@ export interface CD {
       memoryRequest?: string;
       memoryLimit?: string;
     };
+    port?: number;
+    imagePullSecret?: string;
   };
   status?: {
     phase?: CDPhase;
     latestRevision?: string;
     latestImage?: string;
+    availableReplicas?: number;
     message?: string;
     conditions?: Condition[];
   };
@@ -136,6 +148,16 @@ export interface CreatePipelineRequest {
   /** Write-only: stored as Secret `<name>-git`, never returned. */
   token?: string;
   env?: EnvVar[];
+  /** Where the image goes; empty fields use the operator defaults. */
+  image?: {
+    registry?: string;
+    repo?: string;
+    /** Write-only: stored as dockerconfigjson Secret `<name>-registry`. */
+    username?: string;
+    password?: string;
+  };
+  replicas?: number;
+  port?: number;
 }
 
 /** Cluster facts shown in the Bay metrics bar. */

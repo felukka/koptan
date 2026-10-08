@@ -13,7 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 
-	koptanv1 "github.com/felukka/koptan/api/v1"
+	"github.com/felukka/koptan/internal/utils"
 )
 
 // Engine orchestrates the full discovery lifecycle: clone, detect language,
@@ -42,13 +42,12 @@ type DiscoverResult struct {
 	Language      string
 	HasDockerfile bool
 	Dockerfile    []byte
-	RootDir       string
 }
 
-// Discover clones the repository specified in the Service's Source and runs
-// the language detection pipeline. It writes a generated Dockerfile if the
-// repo has none and the detectors found a language.
-func (e *Engine) Discover(ctx context.Context, svc *koptanv1.Service) (*DiscoverResult, error) {
+// Discover clones the repository at rev, detects the language and returns
+// the repository's own Dockerfile or a generated one. The token is only
+// sent to http(s) remotes.
+func (e *Engine) Discover(ctx context.Context, repo string, rev *utils.Revision, token string) (*DiscoverResult, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -59,29 +58,12 @@ func (e *Engine) Discover(ctx context.Context, svc *koptanv1.Service) (*Discover
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
-	defer os.RemoveAll(cloneDir)
+	defer func() { _ = os.RemoveAll(cloneDir) }()
 
-	token := ""
-	if svc.Spec.Source.SecretRef != nil && svc.Spec.Source.SecretRef.Key != "" {
-		// The reconciler is responsible for resolving the secret into an env var;
-		// the engine reads it from the well-known environment variable.
-		token = os.Getenv("KOPTAN_GIT_TOKEN")
-	}
-
-	err = e.cloneRepo(cloneDir, svc, token)
-	if err != nil {
+	if err := cloneAt(ctx, cloneDir, repo, rev, token); err != nil {
 		return nil, fmt.Errorf("clone: %w", err)
 	}
 
-	revision := svc.Spec.Source.Revision
-	if revision == "" {
-		revision = "main"
-	}
-	if err := e.checkout(cloneDir, revision); err != nil {
-		return nil, fmt.Errorf("checkout %s: %w", revision, err)
-	}
-
-	// Run detectors in registered order.
 	language := ""
 	for _, d := range e.Detectors {
 		if d.Match(cloneDir) {
@@ -90,199 +72,128 @@ func (e *Engine) Discover(ctx context.Context, svc *koptanv1.Service) (*Discover
 		}
 	}
 	if language == "" {
-		return nil, fmt.Errorf("no supported language detected in %s", svc.Spec.Source.Repo)
+		return nil, fmt.Errorf("no supported language detected in %s", repo)
 	}
 
-	// Check for existing Dockerfile.
-	dockerfilePath := filepath.Join(cloneDir, "Dockerfile")
-	// Also check root for Dockerfiles in common locations.
-	dockerfilePath = filepath.Join(cloneDir, "Dockerfile")
-	hasDockerfile := false
-	var dockerfile []byte
-	if data, err := os.ReadFile(dockerfilePath); err == nil {
-		hasDockerfile = true
-		dockerfile = data
+	result := &DiscoverResult{Language: language}
+	if data, err := os.ReadFile(filepath.Join(cloneDir, "Dockerfile")); err == nil {
+		result.HasDockerfile = true
+		result.Dockerfile = data
+		return result, nil
 	}
-
-	// Generate if missing.
-	if !hasDockerfile {
-		dockerfile, err = e.generateDockerfile(cloneDir, language)
-		if err != nil {
-			return nil, fmt.Errorf("generate Dockerfile: %w", err)
-		}
-		// Write to the cloned workspace so the reconciler can read it.
-		if err := os.WriteFile(dockerfilePath, dockerfile, 0o644); err != nil {
-			return nil, fmt.Errorf("write Dockerfile: %w", err)
-		}
-	}
-
-	return &DiscoverResult{
-		Language:      language,
-		HasDockerfile: hasDockerfile,
-		Dockerfile:    dockerfile,
-		RootDir:       cloneDir,
-	}, nil
-}
-
-// cloneRepo clones the repository into the target directory.
-func (e *Engine) cloneRepo(targetDir string, svc *koptanv1.Service, token string) error {
-	url := svc.Spec.Source.Repo
-	cloneConfig := &git.CloneOptions{
-		URL:      url,
-		Tags:     git.AllTags,
-		Depth:    1,
-		Progress: os.Stdout,
-	}
-
-	if token != "" {
-		cloneConfig.Auth = &http.BasicAuth{
-			Username: "x-access-token",
-			Password: token,
-		}
-	}
-
-	_, err := git.PlainClone(targetDir, false, cloneConfig)
-	return err
-}
-
-// checkout checks out the specified revision (branch, tag, or SHA).
-func (e *Engine) checkout(repoDir, revision string) error {
-	repo, err := git.PlainOpen(repoDir)
-	if err != nil {
-		return fmt.Errorf("open repo: %w", err)
-	}
-
-	wt, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("get worktree: %w", err)
-	}
-
-	// Try as a branch name first.
-	branchRef := plumbing.NewBranchReferenceName(revision)
-	if _, err := repo.Reference(branchRef, true); err == nil {
-		if err := wt.Checkout(&git.CheckoutOptions{Branch: branchRef, Force: true}); err != nil {
-			// Fall through to tag/SHA.
-		} else {
-			return nil
-		}
-	}
-
-	// Try as a tag.
-	tagRef := plumbing.NewTagReferenceName(revision)
-	if _, err := repo.Reference(tagRef, true); err == nil {
-		if err := wt.Checkout(&git.CheckoutOptions{Branch: tagRef, Force: true}); err != nil {
-			// Fall through to SHA.
-		} else {
-			return nil
-		}
-	}
-
-	// Try as a commit SHA.
-	hash := plumbing.NewHash(revision)
-	if err := wt.Checkout(&git.CheckoutOptions{Hash: hash, Force: true}); err != nil {
-		return fmt.Errorf("checkout revision %q: %w", revision, err)
-	}
-	return nil
-}
-
-// resolveRef looks up a reference by name. Returns true if found.
-func resolveRef(repo *git.Repository, ref plumbing.ReferenceName) (*plumbing.Reference, error) {
-	return repo.Reference(ref, true)
-}
-
-// generateDockerfile creates a minimal, secure Dockerfile for the detected language.
-func (e *Engine) generateDockerfile(repoDir, language string) ([]byte, error) {
 	tmpl, ok := languageDockerfiles[language]
 	if !ok {
 		return nil, fmt.Errorf("no Dockerfile template for language %q", language)
 	}
-	return []byte(tmpl), nil
+	result.Dockerfile = []byte(tmpl)
+	return result, nil
 }
 
-// languageDockerfiles maps known languages to minimal, secure Dockerfile templates
-// using multi-stage builds and non-root users.
+// cloneAt checks out exactly rev: a shallow single-branch clone for a
+// branch or tag, a full clone plus checkout for a bare commit SHA.
+func cloneAt(ctx context.Context, dir, repo string, rev *utils.Revision, token string) error {
+	opts := &git.CloneOptions{URL: repo}
+	if token != "" && utils.IsHTTPURL(repo) {
+		opts.Auth = &http.BasicAuth{Username: "x-access-token", Password: token}
+	}
+	ref := plumbing.ReferenceName(rev.Ref)
+	if ref.IsBranch() || ref.IsTag() {
+		opts.ReferenceName = ref
+		opts.SingleBranch = true
+		opts.Depth = 1
+		_, err := git.PlainCloneContext(ctx, dir, false, opts)
+		return err
+	}
+	opts.NoCheckout = true
+	r, err := git.PlainCloneContext(ctx, dir, false, opts)
+	if err != nil {
+		return err
+	}
+	wt, err := r.Worktree()
+	if err != nil {
+		return err
+	}
+	if err := wt.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(rev.SHA), Force: true}); err != nil {
+		return fmt.Errorf("checkout %s: %w", rev.SHA, err)
+	}
+	return nil
+}
+
+// languageDockerfiles are used when a repository has no Dockerfile. Every
+// image listens on $PORT, which the CD sets (default 8080).
 var languageDockerfiles = map[string]string{
 	"go": `# syntax=docker/dockerfile:1
-# Stage 1: Build
 FROM golang:1.24-bookworm AS builder
 WORKDIR /src
-COPY go.mod go.sum ./
+COPY go.* ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app .
 
-# Stage 2: Run
 FROM gcr.io/distroless/static-debian12
-WORKDIR /
 COPY --from=builder /app /app
 USER nonroot:nonroot
+ENV PORT=8080
 ENTRYPOINT ["/app"]
 `,
 	"java": `# syntax=docker/dockerfile:1
-# Stage 1: Build with Maven
-FROM eclipse-temurin:21-jdk AS builder
+FROM maven:3.9-eclipse-temurin-21 AS builder
 WORKDIR /build
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+RUN mvn -B dependency:go-offline
 COPY src ./src
-RUN mvn package -DskipTests -B
+RUN mvn -B package -DskipTests && cp "$(ls target/*.jar | grep -v -- '-sources\|-javadoc\|original-' | head -n1)" /app.jar
 
-# Stage 2: Run
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=builder /build/target/*.jar /app/app.jar
+COPY --from=builder /app.jar /app/app.jar
 USER 1001:1001
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV PORT=8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 `,
 	"dotnet": `# syntax=docker/dockerfile:1
-# Stage 1: Build
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
 WORKDIR /src
-COPY *.sln .
-COPY **/*.csproj ./
-RUN dotnet restore
 COPY . .
-RUN dotnet publish -c Release -o /app --no-restore
+RUN dotnet publish -c Release -o /app -p:AssemblyName=app
 
-# Stage 2: Run
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=builder /app .
-USER appuser
+USER app
+ENV PORT=8080 ASPNETCORE_HTTP_PORTS=8080
 ENTRYPOINT ["dotnet", "app.dll"]
 `,
 	"node": `# syntax=docker/dockerfile:1
-# Stage 1: Build
 FROM node:20-bookworm AS builder
 WORKDIR /build
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+COPY package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY . .
-RUN npm run build
+RUN npm run build --if-present
 
-# Stage 2: Run
 FROM node:20-bookworm-slim
 WORKDIR /app
-COPY --from=builder /build/package.json ./
-RUN npm ci --omit=dev --omit=dev
-COPY --from=builder /build/dist ./dist
+ENV NODE_ENV=production PORT=8080
+COPY package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+COPY --from=builder /build .
 USER node
-CMD ["node", "dist/index.js"]
+CMD ["npm", "start"]
 `,
 	"python": `# syntax=docker/dockerfile:1
-# Stage 1: Build
 FROM python:3.12-slim AS builder
 WORKDIR /build
-COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
+COPY requirements.txt* pyproject.toml* ./
+RUN mkdir -p /install && if [ -f requirements.txt ]; then pip install --no-cache-dir --prefix=/install -r requirements.txt; \
+    else pip install --no-cache-dir --prefix=/install .; fi
 
-# Stage 2: Run
 FROM python:3.12-slim
 WORKDIR /app
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /install /usr/local
 COPY . .
-ENV PATH=/root/.local/bin:$PATH
 USER 1001:1001
+ENV PORT=8080
 CMD ["python", "-m", "app"]
 `,
 }

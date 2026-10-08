@@ -93,11 +93,58 @@ describe('pipelines', () => {
   });
 
   it('validates create requests', () => {
-    const ok = { name: 'api', repo: 'https://x/y' };
+    const ok = { name: 'api', repo: 'https://x.io/y' };
     expect(validateCreate(ok)).toBeUndefined();
+    expect(
+      validateCreate({ ...ok, repo: 'git@github.com:a/b.git' }),
+    ).toBeUndefined();
+    expect(
+      validateCreate({ ...ok, repo: 'git://10.0.0.1:9418/a.git' }),
+    ).toBeUndefined();
     expect(validateCreate({ ...ok, name: 'Bad_Name' })).toMatch(/name/);
+    expect(validateCreate({ ...ok, namespace: 'Bad NS' })).toMatch(/namespace/);
     expect(validateCreate({ ...ok, repo: '' })).toMatch(/repo/);
     expect(validateCreate({ ...ok, env: [{ name: '' }] })).toMatch(/env/);
+    expect(validateCreate({ ...ok, env: [{ name: '1A' }] })).toMatch(/env/);
+    expect(validateCreate({ ...ok, replicas: -1 })).toMatch(/replicas/);
+    expect(validateCreate({ ...ok, port: 0 })).toMatch(/port/);
+  });
+
+  it('rejects repo and revision strings that git could misread', () => {
+    const ok = { name: 'api', repo: 'https://x.io/y' };
+    for (const repo of [
+      '--upload-pack=touch /tmp/pwned',
+      'file:///etc',
+      '/srv/repo.git',
+      'ext::sh -c touch% /tmp/x',
+      'https://x.io/a b',
+      'ftp://x.io/y',
+    ]) {
+      expect(validateCreate({ ...ok, repo })).toMatch(/repo/);
+    }
+    for (const revision of ['--orphan', '-x', 'a..b', 'main;rm']) {
+      expect(validateCreate({ ...ok, revision })).toMatch(/revision/);
+    }
+    expect(validateCreate({ ...ok, revision: 'feature/x' })).toBeUndefined();
+  });
+
+  it('checks registry fields', () => {
+    const ok = { name: 'api', repo: 'https://x.io/y' };
+    expect(
+      validateCreate({
+        ...ok,
+        image: { registry: 'ghcr.io', repo: 'team/app' },
+      }),
+    ).toBeUndefined();
+    expect(validateCreate({ ...ok, image: { username: 'u' } })).toMatch(
+      /together/,
+    );
+    expect(
+      validateCreate({ ...ok, image: { username: 'u', password: 'p' } }),
+    ).toMatch(/registry/);
+    expect(validateCreate({ ...ok, image: { repo: 'Team/App' } })).toMatch(
+      /image.repo/,
+    );
   });
 
   it('builds a newest-first activity feed', () => {
@@ -129,44 +176,97 @@ describe('pipelines', () => {
     expect(feed.find((e) => e.kind === 'CD')?.severity).toBe('error');
   });
 
-  it('stores the git token in a Secret and references it', async () => {
-    const created: [string, RawResource][] = [];
-    const secrets: [string, Record<string, string>][] = [];
+  const fakeClient = (opts: { failCreate?: unknown } = {}) => {
+    const calls = {
+      created: [] as [string, RawResource][],
+      secrets: [] as [string, Record<string, string>, string | undefined][],
+      owners: [] as [string, string][],
+      deleted: [] as string[],
+    };
     const client: KoptanClient = {
       list: async () => [],
       create: async (kind, _ns, body) => {
-        created.push([kind, body]);
-        return body;
+        if (opts.failCreate) throw opts.failCreate;
+        calls.created.push([kind, body]);
+        return { ...body, metadata: { ...body.metadata, uid: 'uid-1' } };
       },
-      createSecret: async (_ns, name, data) => {
-        secrets.push([name, data]);
+      createSecret: async (_ns, name, data, type) => {
+        calls.secrets.push([name, data, type]);
+      },
+      setSecretOwner: async (_ns, name, owner) => {
+        calls.owners.push([name, owner.uid]);
+      },
+      deleteSecret: async (_ns, name) => {
+        calls.deleted.push(name);
       },
       clusterInfo: async () => ({ nodes: { total: 0, ready: 0 } }),
     };
+    return { client, calls };
+  };
+
+  it('stores secrets, references them and makes the Service own them', async () => {
+    const { client, calls } = fakeClient();
     await createPipeline(
       client,
       {
         name: 'api',
-        repo: 'https://x/y',
+        repo: 'https://x.io/y',
         revision: 'main',
         token: 'ghp_secret',
         env: [{ name: 'A', value: '1' }],
+        image: {
+          registry: 'ghcr.io',
+          repo: 'team/api',
+          username: 'u',
+          password: 'p',
+        },
+        replicas: 2,
+        port: 9090,
       },
       'user:default/me',
     );
-    expect(secrets).toEqual([['api-git', { token: 'ghp_secret' }]]);
-    expect(created).toHaveLength(1);
-    const [[kind, body]] = created;
+    expect(calls.secrets.map(([n, , t]) => [n, t])).toEqual([
+      ['api-git', undefined],
+      ['api-registry', 'kubernetes.io/dockerconfigjson'],
+    ]);
+    const cfg = JSON.parse(calls.secrets[1][1]['.dockerconfigjson']);
+    expect(cfg.auths['ghcr.io'].username).toBe('u');
+    expect(calls.created).toHaveLength(1);
+    const [[kind, body]] = calls.created;
     expect(kind).toBe('Service');
     expect(JSON.stringify(body)).not.toContain('ghp_secret');
+    expect(JSON.stringify(body)).not.toContain('"p"');
     expect(body.spec).toMatchObject({
       source: {
-        repo: 'https://x/y',
+        repo: 'https://x.io/y',
         revision: 'main',
         secretRef: { name: 'api-git', key: 'token' },
       },
       env: [{ name: 'A', value: '1' }],
+      image: {
+        registry: 'ghcr.io',
+        repo: 'team/api',
+        credentialsSecret: 'api-registry',
+      },
+      replicas: 2,
+      port: 9090,
     });
+    expect(calls.owners).toEqual([
+      ['api-git', 'uid-1'],
+      ['api-registry', 'uid-1'],
+    ]);
+  });
+
+  it('deletes the secrets it created when the Service cannot be created', async () => {
+    const { client, calls } = fakeClient({ failCreate: { code: 409 } });
+    await expect(
+      createPipeline(
+        client,
+        { name: 'api', repo: 'https://x.io/y', token: 't' },
+        'user:default/me',
+      ),
+    ).rejects.toMatchObject({ code: 409 });
+    expect(calls.deleted).toEqual(['api-git']);
   });
 
   it('explains 409 and 403 from the Kubernetes API', () => {
@@ -180,6 +280,23 @@ describe('pipelines', () => {
     expect(friendlyError({ code: 403 }, req)).toMatchObject({
       name: 'NotAllowedError',
     });
+    expect(
+      String(
+        friendlyError(
+          {
+            code: 404,
+            body: '{"message":"namespaces \\"team-z\\" not found"}',
+          },
+          { ...req, namespace: 'team-z' },
+        ),
+      ),
+    ).toContain('Namespace "team-z" does not exist');
+    expect(
+      friendlyError(
+        { code: 422, body: { message: 'spec.port: Invalid' } },
+        req,
+      ),
+    ).toMatchObject({ name: 'InputError', message: 'spec.port: Invalid' });
     const other = new Error('boom');
     expect(friendlyError(other, req)).toBe(other);
   });

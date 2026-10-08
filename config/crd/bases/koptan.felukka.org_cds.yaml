@@ -219,6 +219,15 @@ spec:
                   - name
                   type: object
                 type: array
+              imagePullSecret:
+                description: ImagePullSecret is set from the CI's registry credentials.
+                type: string
+              port:
+                description: Port the container listens on (default 8080).
+                format: int32
+                maximum: 65535
+                minimum: 1
+                type: integer
               replicas:
                 default: 1
                 format: int32
@@ -257,6 +266,9 @@ spec:
           status:
             description: CDStatus defines the observed state of a CD deployment.
             properties:
+              availableReplicas:
+                format: int32
+                type: integer
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -313,6 +325,9 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               latestImage:
                 type: string
               latestRevision:

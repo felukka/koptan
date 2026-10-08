@@ -1,4 +1,4 @@
+# CI and CD are created by the operator from the Service; their samples
+# show the fields for reference only.
 resources:
   - koptan_v1_service.yaml
-  - koptan_v1_ci.yaml
-  - koptan_v1_cd.yaml
