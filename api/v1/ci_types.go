@@ -15,6 +15,14 @@ const (
 	CIPhaseFailed    CIPhase = "Failed"
 )
 
+// NamespacedObjectReference is a reference to a namespaced Kubernetes object.
+type NamespacedObjectReference struct {
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
+}
+
+// RegistrySpec defines where to push the built image.
 type RegistrySpec struct {
 	// +kubebuilder:default="docker.io"
 	// +kubebuilder:validation:MinLength=1
@@ -29,6 +37,7 @@ type RegistrySpec struct {
 	Creds *LoginSecret `json:"loginSecret,omitempty"`
 }
 
+// LoginSecret contains registry credentials.
 type LoginSecret struct {
 	// +required
 	Username string `json:"username"`
@@ -38,10 +47,13 @@ type LoginSecret struct {
 	Password []byte `json:"password"`
 }
 
+// CISpec defines the desired state of a CI build.
 type CISpec struct {
+	// Service references the Service CRD that provides the source repo.
 	// +required
-	Service Service `json:"service"`
+	Service NamespacedObjectReference `json:"service"`
 
+	// Image defines the target registry for the built image.
 	// +required
 	Registry RegistrySpec `json:"image"`
 
@@ -49,6 +61,7 @@ type CISpec struct {
 	ExtraSteps []corev1.Container `json:"extraSteps,omitempty"`
 }
 
+// CIStatus defines the observed state of a CI build.
 type CIStatus struct {
 	Phase      CIPhase      `json:"phase,omitempty"`
 	Revision   string       `json:"latestRevision,omitempty"`
@@ -65,9 +78,8 @@ type CIStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.latestImage`
-// +kubebuilder:printcolumn:name="Revision",type=string,JSONPath=`.status.latestRevision`,priority=1
+// +kubebuilder:printcolumn:name="Revision",type=string,JSONPath=`.status.latestRevision`
 // +kubebuilder:printcolumn:name="Builds",type=integer,JSONPath=`.status.buildCount`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 

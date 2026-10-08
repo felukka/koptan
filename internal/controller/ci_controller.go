@@ -1,503 +1,280 @@
+// Package controller provides the CI (Continuous Integration) reconciler
+// for the koptan operator. It builds container images from Service sources
+// and creates CD CRDs on success.
 package controller
 
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
+	koptanv1 "github.com/felukka/koptan/api/v1"
+	"github.com/felukka/koptan/internal/ci"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	koptanv1 "github.com/felukka/koptan/api/v1"
-	"github.com/felukka/koptan/internal/utils"
 )
 
 const (
-	slipwayFinalizer = "felukka.org/cd-cleanup"
-
-	gitImage     = "alpine/git:2.47.2"
-	buildahImage = "quay.io/buildah/stable:v1.43.0"
-
-	workspacePath      = "/tmp/workspace"
-	dockerfilePath     = "/dockerfile"
-	dockerfileVolume   = "app-dockerfile"
-	dockerConfigVolume = "docker-config"
-	dockerConfigPath   = "/auth"
+	ciFinalizer = "felukka.org/ci-cleanup"
 )
 
-type SlipwayReconciler struct {
+// CIReconciler reconciles a CI object by building a container image
+// from the referenced Service and creating a CD CRD on success.
+type CIReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme  *runtime.Scheme
+	Builder ci.Builder
 }
 
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=slipways,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=slipways/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=slipways/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=goapps,verbs=get;list;watch
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=goapps/status,verbs=get
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=dotnetapps,verbs=get;list;watch
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=dotnetapps/status,verbs=get
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=javaapps,verbs=get;list;watch
-// +kubebuilder:rbac:groups=koptan.felukka.org,resources=javaapps/status,verbs=get
+// NewCIReconciler creates a CIReconciler with the default BuildahBuilder.
+func NewCIReconciler(c client.Client, s *runtime.Scheme) *CIReconciler {
+	return &CIReconciler{
+		Client:  c,
+		Scheme:  s,
+		Builder: &ci.BuildahBuilder{},
+	}
+}
 
-func (r *SlipwayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis/finalizers,verbs=update
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=services,verbs=get;list;watch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=cds,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
+// Reconcile implements the CI reconciliation loop.
+// Lifecycle: Idle -> Building (runs builder) -> Succeeded (creates CD).
+func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	var sw koptanv1.Slipway
-	if err := r.Get(ctx, req.NamespacedName, &sw); err != nil {
+	var ciObj koptanv1.CI
+	if err := r.Get(ctx, req.NamespacedName, &ciObj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if !sw.DeletionTimestamp.IsZero() {
-		if controllerutil.ContainsFinalizer(&sw, slipwayFinalizer) {
-			controllerutil.RemoveFinalizer(&sw, slipwayFinalizer)
-			return ctrl.Result{}, r.Update(ctx, &sw)
+	// --- Deletion handling ---
+	if !ciObj.DeletionTimestamp.IsZero() {
+		if controllerutil.ContainsFinalizer(&ciObj, ciFinalizer) {
+			controllerutil.RemoveFinalizer(&ciObj, ciFinalizer)
+			return ctrl.Result{}, r.Update(ctx, &ciObj)
 		}
 		return ctrl.Result{}, nil
 	}
 
-	if !controllerutil.ContainsFinalizer(&sw, slipwayFinalizer) {
-		controllerutil.AddFinalizer(&sw, slipwayFinalizer)
-		if err := r.Update(ctx, &sw); err != nil {
+	// --- Add finalizer ---
+	if !controllerutil.ContainsFinalizer(&ciObj, ciFinalizer) {
+		controllerutil.AddFinalizer(&ciObj, ciFinalizer)
+		if err := r.Update(ctx, &ciObj); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	if sw.Status.Phase == koptanv1.SlipwayPhaseBuilding ||
-		sw.Status.Phase == koptanv1.SlipwayPhaseResolving {
-		return r.trackBuild(ctx, &sw)
-	}
-
-	appPhase, configMapName, sourceRef, err := r.resolveApp(ctx, &sw)
-	if err != nil {
-		log.Error(err, "failed to resolve app")
-		_ = r.updateStatus(ctx, req.NamespacedName, func(s *koptanv1.Slipway) {
-			s.Status.Phase = koptanv1.SlipwayPhaseFailed
-			s.Status.Message = fmt.Sprintf("app resolution failed: %v", err)
-		})
-		return ctrl.Result{}, err
-	}
-
-	if appPhase != koptanv1.AppPhaseReady {
-		_ = r.updateStatus(ctx, req.NamespacedName, func(s *koptanv1.Slipway) {
-			s.Status.Phase = koptanv1.SlipwayPhaseIdle
-			s.Status.Message = fmt.Sprintf("waiting for app to be Ready (current: %s)", appPhase)
-		})
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
-	patToken := r.resolveGitToken(ctx, sw.Namespace, sw.Spec.AppRef.Name, sourceRef)
-
-	revision, err := utils.ResolveBranch(ctx, sourceRef.Repo, sourceRef.Revision, patToken)
-	if err != nil {
-		log.Error(err, "failed to resolve revision")
-		_ = r.updateStatus(ctx, req.NamespacedName, func(s *koptanv1.Slipway) {
-			s.Status.Phase = koptanv1.SlipwayPhaseFailed
-			s.Status.Message = fmt.Sprintf("git resolve failed: %v", err)
-		})
-		return ctrl.Result{}, err
-	}
-
-	if revision.SHA == sw.Status.LatestRevision &&
-		(sw.Status.Phase == koptanv1.SlipwayPhaseSucceeded || sw.Status.Phase == koptanv1.SlipwayPhaseFailed) {
+	// --- Skip if already succeeded ---
+	if ciObj.Status.Phase == koptanv1.CIPhaseSucceeded && ciObj.Status.Image != "" {
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("new revision detected", "sha", revision.SHA)
+	// --- Skip if currently building ---
+	if ciObj.Status.Phase == koptanv1.CIPhaseBuilding {
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
 
-	dockerCfgSecret, err := r.ensureDockerConfigSecret(ctx, &sw)
+	// --- Resolve the Service ---
+	svc, err := r.resolveService(ctx, &ciObj)
 	if err != nil {
-		_ = r.updateStatus(ctx, req.NamespacedName, func(s *koptanv1.Slipway) {
-			s.Status.Phase = koptanv1.SlipwayPhaseFailed
-			s.Status.Message = fmt.Sprintf("docker config secret failed: %v", err)
-		})
+		r.setCIFailed(ctx, &ciObj, "ServiceResolveFailed", fmt.Sprintf("resolve service: %v", err))
 		return ctrl.Result{}, err
 	}
 
-	return r.startBuild(ctx, &sw, revision.SHA, configMapName, sourceRef, dockerCfgSecret)
-}
-
-func (r *SlipwayReconciler) resolveGitToken(
-	ctx context.Context,
-	namespace, appName string,
-	sourceRef koptanv1.SourceRef,
-) string {
-	if sourceRef.PATToken == "" {
-		return ""
-	}
-	authSecretName := AuthSecretNameFor(appName)
-	var secret corev1.Secret
-	if err := r.Get(
-		ctx,
-		types.NamespacedName{Name: authSecretName, Namespace: namespace},
-		&secret,
-	); err == nil {
-		return string(secret.Data["token"])
-	}
-	var fallback corev1.Secret
-	if err := r.Get(
-		ctx,
-		types.NamespacedName{Name: sourceRef.PATToken, Namespace: namespace},
-		&fallback,
-	); err == nil {
-		return string(fallback.Data["token"])
-	}
-	return ""
-}
-
-func (r *SlipwayReconciler) resolveApp(
-	ctx context.Context,
-	sw *koptanv1.Slipway,
-) (koptanv1.AppPhase, string, koptanv1.SourceRef, error) {
-	ref := sw.Spec.AppRef
-	ns := sw.Namespace
-	switch ref.Kind {
-	case "GoApp":
-		var app koptanv1.GoApp
-		if err := r.Get(
-			ctx,
-			types.NamespacedName{Name: ref.Name, Namespace: ns},
-			&app,
-		); err != nil {
-			return "", "", koptanv1.SourceRef{}, fmt.Errorf(
-				"failed to get %s %q in namespace %q: %w",
-				ref.Kind,
-				ref.Name,
-				ns,
-				err,
-			)
+	// --- Wait for Service to be Ready ---
+	if svc.Status.Phase != koptanv1.ServicePhaseReady {
+		msg := fmt.Sprintf("Waiting for Service %q to be ready (current phase: %s)",
+			svc.Name, svc.Status.Phase)
+		setCIPhase(&ciObj, koptanv1.CIPhaseIdle, msg)
+		if err := r.patchStatus(ctx, &ciObj); err != nil {
+			return ctrl.Result{}, err
 		}
-		return app.Status.Phase, app.Status.ConfigMapName, app.Spec.Source, nil
-	case "DotnetApp":
-		var app koptanv1.DotnetApp
-		if err := r.Get(
-			ctx,
-			types.NamespacedName{Name: ref.Name, Namespace: ns},
-			&app,
-		); err != nil {
-			return "", "", koptanv1.SourceRef{}, fmt.Errorf(
-				"failed to get %s %q in namespace %q: %w",
-				ref.Kind,
-				ref.Name,
-				ns,
-				err,
-			)
-		}
-		return app.Status.Phase, app.Status.ConfigMapName, app.Spec.Source, nil
-	case "JavaApp":
-		var app koptanv1.JavaApp
-		if err := r.Get(
-			ctx,
-			types.NamespacedName{Name: ref.Name, Namespace: ns},
-			&app,
-		); err != nil {
-			return "", "", koptanv1.SourceRef{}, fmt.Errorf(
-				"failed to get %s %q in namespace %q: %w",
-				ref.Kind,
-				ref.Name,
-				ns,
-				err,
-			)
-		}
-		return app.Status.Phase, app.Status.ConfigMapName, app.Spec.Source, nil
-	default:
-		return "", "", koptanv1.SourceRef{}, fmt.Errorf("unsupported app kind %q", ref.Kind)
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
-}
 
-func (r *SlipwayReconciler) ensureDockerConfigSecret(
-	ctx context.Context,
-	sw *koptanv1.Slipway,
-) (string, error) {
-	creds := sw.Spec.Image.Creds
-	if creds == nil {
-		return "", nil
+	// --- Phase: Building ---
+	log.Info("starting build", "service", svc.Name, "image", ciObj.Spec.Registry.Repo)
+	setCIPhase(&ciObj, koptanv1.CIPhaseBuilding, "Build in progress")
+	if err := r.patchStatus(ctx, &ciObj); err != nil {
+		return ctrl.Result{}, err
 	}
-	secretName := sw.Name + "-registry-auth"
-	configJSON, err := buildDockerConfigJSON(sw.Spec.Image.Registry, creds.Username, creds.Password)
+
+	// Run the builder.
+	imageRef, err := r.Builder.Build(ctx, &ciObj, svc)
 	if err != nil {
-		return "", err
+		r.setCIFailed(ctx, &ciObj, "BuildFailed", fmt.Sprintf("build: %v", err))
+		return ctrl.Result{}, err
 	}
-	desired := &corev1.Secret{
+
+	log.Info("build succeeded", "image", imageRef)
+	ciObj.Status.Phase = koptanv1.CIPhaseSucceeded
+	ciObj.Status.Image = imageRef
+	ciObj.Status.Message = "build succeeded"
+	now := metav1.Now()
+	ciObj.Status.BuildTime = &now
+	ciObj.Status.BuildCount++
+	ciObj.Status.Revision = svc.Spec.Source.Revision
+
+	meta.SetStatusCondition(&ciObj.Status.Conditions, metav1.Condition{
+		Type:               "BuildSucceeded",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "BuildCompleted",
+		Message:            fmt.Sprintf("Image %s", imageRef),
+	})
+
+	if err := r.patchStatus(ctx, &ciObj); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// --- Create CD CRD ---
+	if err := r.createCD(ctx, &ciObj, svc, imageRef); err != nil {
+		log.Error(err, "failed to create CD CRD")
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// resolveService fetches the Service referenced by this CI CRD.
+func (r *CIReconciler) resolveService(ctx context.Context, ciObj *koptanv1.CI) (*koptanv1.Service, error) {
+	svc := &koptanv1.Service{}
+	key := types.NamespacedName{
+		Name:      ciObj.Spec.Service.Name,
+		Namespace: ciObj.Namespace,
+	}
+	if err := r.Get(ctx, key, svc); err != nil {
+		return nil, fmt.Errorf("get service %q: %w", key, err)
+	}
+	return svc, nil
+}
+
+// createCD creates a CD CRD that deploys the built image.
+func (r *CIReconciler) createCD(ctx context.Context, ciObj *koptanv1.CI, svc *koptanv1.Service, imageRef string) error {
+	// Check if CD already exists for this service.
+	cdName := fmt.Sprintf("%s-cd", svc.Name)
+	var existingCD koptanv1.CD
+	err := r.Get(ctx, types.NamespacedName{Name: cdName, Namespace: ciObj.Namespace}, &existingCD)
+	if err == nil {
+		// CD already exists — update the image reference if changed.
+		if existingCD.Status.Image != imageRef {
+			existingCD.Status.Image = imageRef
+			existingCD.Status.Revision = svc.Spec.Source.Revision
+			existingCD.Status.Message = "waiting for deployment"
+			if existingCD.Status.Conditions == nil {
+				existingCD.Status.Conditions = []metav1.Condition{}
+			}
+			meta.SetStatusCondition(&existingCD.Status.Conditions, metav1.Condition{
+				Type:               "Ready",
+				Status:             metav1.ConditionUnknown,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "ImageUpdated",
+				Message:            "New image available",
+			})
+			if err := r.Status().Update(ctx, &existingCD); err != nil {
+				return fmt.Errorf("update CD status: %w", err)
+			}
+		}
+		return nil
+	}
+
+	if !errors.IsNotFound(err) {
+		return fmt.Errorf("check existing CD: %w", err)
+	}
+
+	cd := &koptanv1.CD{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: sw.Namespace,
-			Labels:    map[string]string{"felukka.org/slipway": sw.Name},
+			Name:      cdName,
+			Namespace: ciObj.Namespace,
+			Labels: map[string]string{
+				"koptan.felukka.org/service": svc.Name,
+				"koptan.felukka.org/ci":      ciObj.Name,
+			},
 		},
-		Type: corev1.SecretTypeDockerConfigJson,
-		Data: map[string][]byte{".dockerconfigjson": configJSON},
-	}
-	if err := ctrl.SetControllerReference(sw, desired, r.Scheme); err != nil {
-		return "", err
-	}
-	var existing corev1.Secret
-	err = r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: sw.Namespace}, &existing)
-	if errors.IsNotFound(err) {
-		if err := r.Create(ctx, desired); err != nil {
-			return "", err
-		}
-		return secretName, nil
-	}
-	if err != nil {
-		return "", err
-	}
-	existing.Data = desired.Data
-	existing.Labels = desired.Labels
-	if err := r.Update(ctx, &existing); err != nil {
-		return "", err
-	}
-	return secretName, nil
-}
-
-func (r *SlipwayReconciler) hasActivePod(ctx context.Context, sw *koptanv1.Slipway) (bool, error) {
-	var podList corev1.PodList
-
-	if err := r.List(
-		ctx,
-		&podList,
-		client.InNamespace(sw.Namespace),
-		client.MatchingLabels{"felukka.org/slipway": sw.Name},
-	); err != nil {
-		return false, err
-	}
-
-	for _, pod := range podList.Items {
-		phase := pod.Status.Phase
-		if phase != corev1.PodSucceeded && phase != corev1.PodFailed {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func (r *SlipwayReconciler) startBuild(
-	ctx context.Context,
-	sw *koptanv1.Slipway,
-	sha, configMapName string,
-	sourceRef koptanv1.SourceRef,
-	dockerCfgSecret string,
-) (ctrl.Result, error) {
-	active, err := r.hasActivePod(ctx, sw)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if active {
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
-	imageTag := fmt.Sprintf("%s/%s:%s", sw.Spec.Image.Registry, sw.Spec.Image.Name, sha[:12])
-	pod := r.buildPod(sw, sha, configMapName, sourceRef, imageTag, dockerCfgSecret)
-	if err := ctrl.SetControllerReference(sw, pod, r.Scheme); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if err := r.Create(ctx, pod); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	err = r.updateStatus(
-		ctx,
-		types.NamespacedName{Name: sw.Name, Namespace: sw.Namespace},
-		func(s *koptanv1.Slipway) {
-			if s.Status.LatestRevision != sha {
-				now := metav1.Now()
-				s.Status.LastBuildTime = &now
-				s.Status.BuildCount++
-			}
-			s.Status.Phase = koptanv1.SlipwayPhaseResolving
-			s.Status.LatestRevision = sha
-			s.Status.LatestImage = imageTag
-			s.Status.Message = "build pod created"
-
-			meta.SetStatusCondition(&s.Status.Conditions, metav1.Condition{
-				Type:    condBuild,
-				Status:  metav1.ConditionUnknown,
-				Reason:  "BuildStarted",
-				Message: "build pod created",
-			})
-			meta.SetStatusCondition(&s.Status.Conditions, metav1.Condition{
-				Type:    condReady,
-				Status:  metav1.ConditionFalse,
-				Reason:  "Building",
-				Message: "build in progress",
-			})
+		Spec: koptanv1.CDSpec{
+			CI: koptanv1.NamespacedObjectReference{
+				Name: ciObj.Name,
+			},
+			Replicas: 1,
+			Env:      svc.Spec.Env,
+			Resources: &koptanv1.Resources{
+				CPURequest:    ptrQ("100m"),
+				CPULimit:      ptrQ("500m"),
+				MemoryRequest: ptrQ("128Mi"),
+				MemoryLimit:   ptrQ("256Mi"),
+			},
 		},
-	)
+	}
 
-	return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+	if err := controllerutil.SetControllerReference(ciObj, cd, r.Scheme); err != nil {
+		return fmt.Errorf("set controller ref on CD: %w", err)
+	}
+
+	return r.Create(ctx, cd)
 }
 
-func (r *SlipwayReconciler) trackBuild(
-	ctx context.Context,
-	sw *koptanv1.Slipway,
-) (ctrl.Result, error) {
-	logger := logf.FromContext(ctx)
-	var podList corev1.PodList
-	if err := r.List(
-		ctx,
-		&podList,
-		client.InNamespace(sw.Namespace),
-		client.MatchingLabels{"felukka.org/slipway": sw.Name},
-	); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if len(podList.Items) == 0 {
-		err := r.updateStatus(
-			ctx,
-			types.NamespacedName{Name: sw.Name, Namespace: sw.Namespace},
-			func(s *koptanv1.Slipway) {
-				s.Status.Phase = koptanv1.SlipwayPhaseFailed
-				s.Status.Message = "build pod disappeared"
-			},
-		)
-		if err != nil {
-			logger.Error(err, "failed to update Slipway status when build pod disappeared",
-				"slipway", sw.Name, "namespace", sw.Namespace)
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, nil
-	}
-
-	sort.Slice(podList.Items, func(i, j int) bool {
-		return podList.Items[i].CreationTimestamp.Before(&podList.Items[j].CreationTimestamp)
-	})
-	pod := &podList.Items[len(podList.Items)-1]
-
-	phase, msg, finished := simplifyPodStatus(pod)
-
-	if finished {
-		err := r.updateStatus(
-			ctx,
-			types.NamespacedName{Name: sw.Name, Namespace: sw.Namespace},
-			func(s *koptanv1.Slipway) {
-				if phase == koptanv1.SlipwayPhaseSucceeded {
-					s.Status.Phase = koptanv1.SlipwayPhaseSucceeded
-					s.Status.Message = "build succeeded"
-					meta.SetStatusCondition(&s.Status.Conditions, metav1.Condition{
-						Type: condBuild, Status: metav1.ConditionTrue, Reason: "BuildSucceeded",
-					})
-					meta.SetStatusCondition(&s.Status.Conditions, metav1.Condition{
-						Type: condReady, Status: metav1.ConditionTrue, Reason: "ImageAvailable",
-					})
-				} else {
-					s.Status.Phase = koptanv1.SlipwayPhaseFailed
-					s.Status.Message = msg
-					meta.SetStatusCondition(&s.Status.Conditions, metav1.Condition{
-						Type:    condBuild,
-						Status:  metav1.ConditionFalse,
-						Reason:  "BuildFailed",
-						Message: msg,
-					})
-				}
-			},
-		)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if delErr := r.Delete(ctx, pod); delErr != nil && !errors.IsNotFound(delErr) {
-			return ctrl.Result{}, delErr
-		}
-		return ctrl.Result{}, nil
-	}
-
-	if sw.Status.Message != msg {
-		err := r.updateStatus(
-			ctx,
-			types.NamespacedName{Name: sw.Name, Namespace: sw.Namespace},
-			func(s *koptanv1.Slipway) {
-				s.Status.Phase = koptanv1.SlipwayPhaseBuilding
-				s.Status.Message = msg
-			},
-		)
-		if err != nil {
-			logger.Error(err, "failed to update Slipway status during build",
-				"slipway", sw.Name, "namespace", sw.Namespace)
-			return ctrl.Result{}, err
-		}
-	}
-
-	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+// patchStatus patches the CI status with the latest conditions.
+func (r *CIReconciler) patchStatus(ctx context.Context, ciObj *koptanv1.CI) error {
+	return r.Status().Update(ctx, ciObj)
 }
 
-func simplifyPodStatus(pod *corev1.Pod) (koptanv1.SlipwayPhase, string, bool) {
-	if pod.Status.Phase == corev1.PodSucceeded {
-		return koptanv1.SlipwayPhaseSucceeded, "build completed", true
+// setCIPhase sets the CI phase and message.
+func setCIPhase(ciObj *koptanv1.CI, phase koptanv1.CIPhase, message string) {
+	ciObj.Status.Phase = phase
+	ciObj.Status.Message = message
+	if ciObj.Status.Conditions == nil {
+		ciObj.Status.Conditions = []metav1.Condition{}
 	}
-	if pod.Status.Phase == corev1.PodFailed {
-		msg := "pod failed"
-		if pod.Status.Message != "" {
-			msg = pod.Status.Message
-		}
-		for _, c := range append(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses...) {
-			if t := c.State.Terminated; t != nil && t.ExitCode != 0 {
-				detail := t.Reason
-				if detail == "" {
-					detail = t.Message
-				}
-				if detail != "" {
-					msg = fmt.Sprintf(
-						"container %s failed with exit code %d: %s",
-						c.Name,
-						t.ExitCode,
-						detail,
-					)
-				} else {
-					msg = fmt.Sprintf("container %s failed with exit code %d", c.Name, t.ExitCode)
-				}
-				return koptanv1.SlipwayPhaseFailed, msg, true
-			}
-		}
-		return koptanv1.SlipwayPhaseFailed, msg, true
-	}
-
-	msg := "pod pending"
-	if pod.Status.Phase == corev1.PodRunning {
-		msg = "pod running"
-	}
-	for _, c := range pod.Status.ContainerStatuses {
-		if c.State.Waiting != nil {
-			msg = fmt.Sprintf("%s: %s", c.Name, c.State.Waiting.Reason)
-		}
-	}
-	return koptanv1.SlipwayPhaseBuilding, msg, false
-}
-
-func (r *SlipwayReconciler) updateStatus(
-	ctx context.Context,
-	name types.NamespacedName,
-	modify func(*koptanv1.Slipway),
-) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		var sw koptanv1.Slipway
-		if err := r.Get(ctx, name, &sw); err != nil {
-			return err
-		}
-		modify(&sw)
-		return r.Status().Update(ctx, &sw)
+	meta.SetStatusCondition(&ciObj.Status.Conditions, metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionUnknown,
+		LastTransitionTime: metav1.Now(),
+		Reason:             string(phase),
+		Message:            message,
 	})
 }
 
-func (r *SlipwayReconciler) SetupWithManager(mgr ctrl.Manager) error {
+// setCIFailed marks the CI as Failed.
+func (r *CIReconciler) setCIFailed(ctx context.Context, ciObj *koptanv1.CI, reason, msg string) {
+	ciObj.Status.Phase = koptanv1.CIPhaseFailed
+	ciObj.Status.Message = msg
+	if ciObj.Status.Conditions == nil {
+		ciObj.Status.Conditions = []metav1.Condition{}
+	}
+	meta.SetStatusCondition(&ciObj.Status.Conditions, metav1.Condition{
+		Type:               "BuildSucceeded",
+		Status:             metav1.ConditionFalse,
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            msg,
+	})
+	_ = r.patchStatus(ctx, ciObj)
+}
+
+// ptrQ is a helper to create a pointer to a resource.Quantity.
+func ptrQ(s string) *resource.Quantity {
+	q := resource.MustParse(s)
+	return &q
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *CIReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&koptanv1.Slipway{}).
-		Owns(&corev1.Pod{}).
-		Named("slipway").
+		For(&koptanv1.CI{}).
+		Owns(&koptanv1.CD{}).
+		Named("ci").
 		Complete(r)
 }

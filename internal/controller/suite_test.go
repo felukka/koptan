@@ -15,7 +15,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	v1alpha "github.com/felukka/koptan/api/v1alpha"
+	koptanv1 "github.com/felukka/koptan/api/v1"
 )
 
 var (
@@ -36,7 +36,7 @@ var _ = BeforeSuite(func() {
 
 	ctx, cancel = context.WithCancel(context.TODO())
 
-	err := v1alpha.AddToScheme(scheme.Scheme)
+	err := koptanv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	testEnv = &envtest.Environment{

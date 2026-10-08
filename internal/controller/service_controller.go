@@ -1,14 +1,19 @@
+// Package controller provides the Service reconciler for the koptan operator.
+// It discovers source languages, generates Dockerfiles, and manages the
+// CI/CD pipeline lifecycle. When a Ready Service detects a new git commit,
+// it re-triggers the full pipeline (discover → build → deploy).
 package controller
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
-	koptanv1 "github.com/felukka/koptanv1/api/v1"
-	service "github.com/felukka/koptanv1/internal/service"
+	koptanv1 "github.com/felukka/koptan/api/v1"
+	"github.com/felukka/koptan/internal/service"
+	"github.com/felukka/koptan/internal/utils"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,352 +25,344 @@ import (
 )
 
 const (
-	appFinalizer   = "felukka.org/app-cleanup"
-	dockerfileKey  = "dockerfile"
-	patSecretKey   = "token"
-	authSecretName = "-git-auth"
+	// serviceFinalizer is the finalizer applied to Service resources.
+	serviceFinalizer = "felukka.org/service-cleanup"
+	// pushPollInterval is how often to check for new commits on Ready services.
+	pushPollInterval = 1 * time.Minute
 )
 
-type AppReconciler struct {
+// ServiceReconciler reconciles a Service object by discovering the source
+// language, generating a Dockerfile if needed, and creating a CI CRD to
+// trigger the build pipeline. On Ready services it polls for new git commits.
+type ServiceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=goapps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=goapps/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=goapps/finalizers,verbs=update
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=dotnetapps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=dotnetapps/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=dotnetapps/finalizers,verbs=update
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=javaapps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=javaapps/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=koptanv1.felukka.org,resources=javaapps/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=services/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=services/finalizers,verbs=update
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=cds,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-func (r *AppReconciler) ReconcileGoApp(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var goApp koptanv1.GoApp
-	if err := r.Get(ctx, req.NamespacedName, &goApp); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	return r.reconcile(ctx, &goAppAdapter{&goApp})
-}
-
-func (r *AppReconciler) ReconcileDotnetApp(
-	ctx context.Context,
-	req ctrl.Request,
-) (ctrl.Result, error) {
-	var dotnetApp koptanv1.DotnetApp
-	if err := r.Get(ctx, req.NamespacedName, &dotnetApp); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	return r.reconcile(ctx, &dotnetAppAdapter{&dotnetApp})
-}
-
-func (r *AppReconciler) ReconcileJavaApp(
-	ctx context.Context,
-	req ctrl.Request,
-) (ctrl.Result, error) {
-	var javaApp koptanv1.JavaApp
-	if err := r.Get(ctx, req.NamespacedName, &javaApp); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	return r.reconcile(ctx, &javaAppAdapter{&javaApp})
-}
-
-func (r *AppReconciler) reconcile(ctx context.Context, app App) (ctrl.Result, error) {
+// Reconcile implements the Service reconciliation loop.
+// Lifecycle: Pending -> Discovering -> Building (creates CI) -> Ready.
+// On Ready: polls git for new commits and re-triggers the pipeline.
+func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	if !app.GetDeletionTimestamp().IsZero() {
-		if controllerutil.ContainsFinalizer(app, appFinalizer) {
-			controllerutil.RemoveFinalizer(app, appFinalizer)
-			if err := r.Update(ctx, app.RuntimeObject()); err != nil {
-				return ctrl.Result{}, err
-			}
+	var svc koptanv1.Service
+	if err := r.Get(ctx, req.NamespacedName, &svc); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// --- Deletion handling ---
+	if !svc.DeletionTimestamp.IsZero() {
+		if controllerutil.ContainsFinalizer(&svc, serviceFinalizer) {
+			controllerutil.RemoveFinalizer(&svc, serviceFinalizer)
+			return ctrl.Result{}, r.Update(ctx, &svc)
 		}
 		return ctrl.Result{}, nil
 	}
 
-	if !controllerutil.ContainsFinalizer(app, appFinalizer) {
-		controllerutil.AddFinalizer(app, appFinalizer)
-		if err := r.Update(ctx, app.RuntimeObject()); err != nil {
+	// --- Add finalizer ---
+	if !controllerutil.ContainsFinalizer(&svc, serviceFinalizer) {
+		controllerutil.AddFinalizer(&svc, serviceFinalizer)
+		if err := r.Update(ctx, &svc); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	if app.GetAppPhase() == koptanv1.AppPhaseReady &&
-		app.GetObservedGeneration() >= app.GetGeneration() {
-		return ctrl.Result{}, nil
+	// --- Polling phase: check for new git commits on Ready services ---
+	if svc.Status.Phase == koptanv1.ServicePhaseReady {
+		// Update CDRef by finding owned CD resources.
+		r.updateCDRef(ctx, &svc)
+		return r.reconcileReady(ctx, &svc)
 	}
 
-	if app.GetAppPhase() != koptanv1.AppPhaseDiscovering {
-		app.SetAppPhase(koptanv1.AppPhaseDiscovering)
-		if err := r.statusUpdate(ctx, app); err != nil {
+	// --- Phase 1: Discovering ---
+	if svc.Status.Phase != koptanv1.ServicePhaseDiscovering {
+		setPhase(ctx, &svc, koptanv1.ServicePhaseDiscovering, "Starting discovery")
+		if err := r.patchStatus(ctx, &svc); err != nil {
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 
-	src := app.GetSourceRef()
+	// Run the discovery engine.
+	log.Info("running discovery engine")
+	engine := service.NewEngine()
 
-	token, err := r.resolveToken(ctx, app.GetNamespace(), src)
-	if err != nil {
-		return ctrl.Result{}, r.failWith(ctx, app, "TokenResolveFailed", err.Error())
-	}
-
-	if token != "" {
-		if err := r.ensureAuthSecret(ctx, app, token); err != nil {
-			return ctrl.Result{}, r.failWith(ctx, app, "AuthSecretFailed", err.Error())
+	// Resolve git token from the secret if provided.
+	if svc.Spec.Source.SecretRef != nil {
+		secret := &corev1.Secret{}
+		secretKey := types.NamespacedName{
+			Name:      svc.Spec.Source.SecretRef.Name,
+			Namespace: req.Namespace,
+		}
+		if err := r.Get(ctx, secretKey, secret); err == nil {
+			if key := svc.Spec.Source.SecretRef.Key; key != "" {
+				os.Setenv("KOPTAN_GIT_TOKEN", string(secret.Data[key]))
+			}
 		}
 	}
+	ctx = logf.IntoContext(ctx, log)
 
-	cloneDir, err := os.MkdirTemp("", "koptanv1.discover-*")
+	result, err := engine.Discover(ctx, &svc)
 	if err != nil {
-		return ctrl.Result{}, r.failWith(ctx, app, "TmpDirFailed", err.Error())
+		r.setFailed(ctx, &svc, "DiscoveryFailed", fmt.Sprintf("discover: %v", err))
+		return ctrl.Result{}, err
 	}
-	defer func() { _ = os.RemoveAll(cloneDir) }()
 
-	log.Info("cloning source", "repo", src.Repo, "revision", src.Revision)
-	_, err = appfactory.Checkout(appfactory.CloneOptions{
-		Repo:     src.Repo,
-		Revision: src.Revision,
-		Token:    token,
-		Dir:      cloneDir,
+	log.Info("discovery complete", "language", result.Language, "hasDockerfile", result.HasDockerfile)
+
+	// Update status with discovered language.
+	svc.Status.ServiceType = result.Language
+	svc.Status.Error = ""
+
+	// --- Phase 2: Building — create the CI CRD ---
+	if err := r.createCI(ctx, &svc, result.Language); err != nil {
+		r.setFailed(ctx, &svc, "CIInitFailed", fmt.Sprintf("create CI: %v", err))
+		return ctrl.Result{}, err
+	}
+
+	setPhase(ctx, &svc, koptanv1.ServicePhaseBuilding,
+		fmt.Sprintf("CI CRD created for %s", result.Language))
+	meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
+		Type:               "DockerfileGenerated",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "Generated",
+		Message: fmt.Sprintf("Dockerfile %s for %s",
+			map[bool]string{true: "detected", false: "generated"}[result.HasDockerfile],
+			result.Language),
 	})
-	if err != nil {
-		return ctrl.Result{}, r.failWith(
-			ctx,
-			app,
-			"CloneFailed",
-			fmt.Sprintf("clone failed: %v", err),
-		)
-	}
 
-	log.Info("running discovery on cloned repo")
-	content, err := app.RunDiscoveryAndGenerate(cloneDir)
-	if err != nil {
-		return ctrl.Result{}, r.failWith(ctx, app, "DiscoveryFailed", err.Error())
-	}
+	// Set observed generation.
+	svc.Status.Conditions = append(svc.Status.Conditions, metav1.Condition{
+		Type:               "Observed",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "ObservedGeneration",
+		ObservedGeneration: svc.GetGeneration(),
+	})
 
-	cmName := app.GetName() + "-dockerfile"
-	if err := r.reconcileConfigMap(ctx, app, cmName, content); err != nil {
+	if err := r.patchStatus(ctx, &svc); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.setReady(ctx, app, cmName); err != nil {
+	setPhase(ctx, &svc, koptanv1.ServicePhaseReady, "Discovery complete, CI created")
+	if err := r.patchStatus(ctx, &svc); err != nil {
 		return ctrl.Result{}, err
 	}
+
 	return ctrl.Result{}, nil
 }
 
-func (r *AppReconciler) resolveToken(
-	ctx context.Context,
-	namespace string,
-	src koptanv1.SourceRef,
-) (string, error) {
-	if src.PATToken == "" {
-		return "", nil
-	}
-
-	var secret corev1.Secret
-	key := types.NamespacedName{Name: src.PATToken, Namespace: namespace}
-	if err := r.Get(ctx, key, &secret); err != nil {
-		if errors.IsNotFound(err) {
-			return "", fmt.Errorf(
-				"pat secret %q not found in namespace %q",
-				src.PATToken,
-				namespace,
-			)
-		}
-		return "", fmt.Errorf("getting pat secret %q: %w", src.PATToken, err)
-	}
-
-	tokenBytes, ok := secret.Data[patSecretKey]
-	if !ok {
-		return "", fmt.Errorf("pat secret %q has no %q key", src.PATToken, patSecretKey)
-	}
-	return string(tokenBytes), nil
-}
-
-func (r *AppReconciler) ensureAuthSecret(ctx context.Context, app App, token string) error {
-	secretName := app.GetName() + authSecretName
-
-	desired := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: app.GetNamespace(),
-			Labels: map[string]string{
-				"felukka.org/app":       app.GetName(),
-				"felukka.org/component": "git-auth",
-			},
-		},
-		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			patSecretKey: []byte(token),
-		},
-	}
-
-	if err := controllerutil.SetOwnerReference(app.RuntimeObject(), desired, r.Scheme); err != nil {
-		return fmt.Errorf("setting owner reference on auth secret: %w", err)
-	}
-
-	var existing corev1.Secret
-	key := types.NamespacedName{Name: secretName, Namespace: app.GetNamespace()}
-	err := r.Get(ctx, key, &existing)
-
-	if errors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return fmt.Errorf("checking auth secret %q: %w", secretName, err)
-	}
-
-	if string(existing.Data[patSecretKey]) != token {
-		existing.Data = desired.Data
-		existing.Labels = desired.Labels
-		return r.Update(ctx, &existing)
-	}
-	return nil
-}
-
-func AuthSecretNameFor(appName string) string {
-	return appName + authSecretName
-}
-
-func (r *AppReconciler) reconcileConfigMap(
-	ctx context.Context,
-	app App,
-	cmName, content string,
-) error {
+// reconcileReady checks the git repo for new commits on a Ready Service.
+// If a new commit is detected, it re-triggers the full pipeline.
+func (r *ServiceReconciler) reconcileReady(ctx context.Context, svc *koptanv1.Service) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	desired := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cmName,
-			Namespace: app.GetNamespace(),
-			Labels: map[string]string{
-				"felukka.org/app":       app.GetName(),
-				"felukka.org/app-kind":  app.GetObjectKind().GroupVersionKind().Kind,
-				"felukka.org/component": "dockerfile",
-			},
-		},
-		Data: map[string]string{
-			dockerfileKey: content,
-		},
-	}
-
-	if err := controllerutil.SetControllerReference(
-		app.RuntimeObject(),
-		desired,
-		r.Scheme,
-	); err != nil {
-		return fmt.Errorf("setting controller reference on ConfigMap: %w", err)
-	}
-
-	var existing corev1.ConfigMap
-	key := types.NamespacedName{Name: cmName, Namespace: app.GetNamespace()}
-	err := r.Get(ctx, key, &existing)
-
-	switch {
-	case errors.IsNotFound(err):
-		log.Info("creating Dockerfile ConfigMap", "configmap", cmName)
-		return r.Create(ctx, desired)
-	case err != nil:
-		return fmt.Errorf("getting ConfigMap %s: %w", cmName, err)
-	default:
-		if existing.Data[dockerfileKey] != content {
-			existing.Data = desired.Data
-			existing.Labels = desired.Labels
-			log.Info("updating Dockerfile ConfigMap", "configmap", cmName)
-			return r.Update(ctx, &existing)
+	// Resolve git token.
+	token := ""
+	if svc.Spec.Source.SecretRef != nil {
+		secret := &corev1.Secret{}
+		secretKey := types.NamespacedName{
+			Name:      svc.Spec.Source.SecretRef.Name,
+			Namespace: svc.Namespace,
+		}
+		if err := r.Get(ctx, secretKey, secret); err == nil {
+			if key := svc.Spec.Source.SecretRef.Key; key != "" {
+				token = string(secret.Data[key])
+			}
 		}
 	}
-	return nil
+
+	// Check for new commits.
+	revision := svc.Spec.Source.Revision
+	if revision == "" {
+		revision = "main"
+	}
+
+	changed, newRevision, err := utils.HasRevisionChanged(ctx, svc.Spec.Source.Repo, revision, svc.Status.LatestRevision, token)
+	if err != nil {
+		log.Error(err, "failed to check for new commits, will retry")
+		return ctrl.Result{RequeueAfter: pushPollInterval}, nil
+	}
+
+	if !changed {
+		// No new commits — recheck after the poll interval.
+		return ctrl.Result{RequeueAfter: pushPollInterval}, nil
+	}
+
+	// --- New commit detected! Re-trigger the pipeline ---
+	log.Info("new commit detected, re-triggering pipeline",
+		"previousRevision", svc.Status.LatestRevision,
+		"newRevision", newRevision.SHA)
+
+	// Update revision tracking fields.
+	now := metav1.Now()
+	svc.Status.LatestRevision = newRevision.SHA
+	svc.Status.LastPushDetected = &now
+
+	// Transition to Discovering to re-run the full pipeline.
+	setPhase(ctx, svc, koptanv1.ServicePhaseDiscovering,
+		fmt.Sprintf("New commit %s detected, re-discovering", newRevision.SHA[:12]))
+	meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
+		Type:               "CommitDetected",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "NewCommit",
+		Message: fmt.Sprintf("New commit %s detected on %s — pipeline re-triggered",
+			newRevision.SHA[:12], svc.Spec.Source.Repo),
+	})
+
+	if err := r.patchStatus(ctx, svc); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Delete the old CI so a fresh one gets created during discovery.
+	oldCIName := svc.Status.CIRef
+	if oldCIName != "" {
+		oldCI := &koptanv1.CI{}
+		if err := r.Get(ctx, types.NamespacedName{Name: oldCIName, Namespace: svc.Namespace}, oldCI); err == nil {
+			if delErr := r.Delete(ctx, oldCI); delErr != nil {
+				if ignored := client.IgnoreNotFound(delErr); ignored != nil {
+					log.Error(ignored, "failed to delete old CI, will retry")
+				}
+			}
+		}
+	}
+
+	// Delete the old CD so it gets recreated.
+	oldCDName := svc.Status.CDRef
+	if oldCDName != "" {
+		oldCD := &koptanv1.CD{}
+		if err := r.Get(ctx, types.NamespacedName{Name: oldCDName, Namespace: svc.Namespace}, oldCD); err == nil {
+			if delErr := r.Delete(ctx, oldCD); delErr != nil {
+				if ignored := client.IgnoreNotFound(delErr); ignored != nil {
+					log.Error(ignored, "failed to delete old CD, will retry")
+				}
+			}
+		}
+	}
+
+	// Requeue immediately to start the discovery cycle.
+	return ctrl.Result{Requeue: true}, nil
 }
 
-func (r *AppReconciler) setReady(ctx context.Context, app App, cmName string) error {
-	app.SetAppPhase(koptanv1.AppPhaseReady)
-	app.SetObservedGeneration(app.GetGeneration())
-	app.SetConfigMapName(cmName)
-	app.SetError("")
+// createCI creates a CI CRD that references this Service, triggering the build pipeline.
+func (r *ServiceReconciler) createCI(ctx context.Context, svc *koptanv1.Service, language string) error {
+	// Check if a CI CRD already exists for this service.
+	var ciList koptanv1.CIList
+	if err := r.List(ctx, &ciList, client.InNamespace(svc.Namespace)); err != nil {
+		return err
+	}
+	for _, ci := range ciList.Items {
+		if ci.Spec.Service.Name == svc.Name {
+			// CI already exists — nothing to do.
+			svc.Status.CIRef = ci.Name
+			return nil
+		}
+	}
 
-	conditions := app.GetConditions()
-	meta.SetStatusCondition(conditions, metav1.Condition{
-		Type:               koptanv1.AppConditionDockerfileGenerated,
-		Status:             metav1.ConditionTrue,
-		Reason:             "Generated",
-		Message:            "Dockerfile generated from discovered source",
-		ObservedGeneration: app.GetGeneration(),
-	})
-	meta.SetStatusCondition(conditions, metav1.Condition{
-		Type:               koptanv1.AppConditionConfigMapReady,
-		Status:             metav1.ConditionTrue,
-		Reason:             "ConfigMapReady",
-		Message:            fmt.Sprintf("ConfigMap %s is up to date", cmName),
-		ObservedGeneration: app.GetGeneration(),
-	})
+	ci := &koptanv1.CI{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-ci", svc.Name),
+			Namespace: svc.Namespace,
+			Labels: map[string]string{
+				"koptan.felukka.org/service":  svc.Name,
+				"koptan.felukka.org/language": language,
+			},
+		},
+		Spec: koptanv1.CISpec{
+			Service: koptanv1.NamespacedObjectReference{
+				Name: svc.Name,
+			},
+			Registry: koptanv1.RegistrySpec{
+				Registry: "docker.io",
+				Repo:     fmt.Sprintf("%s/%s", "felukka", svc.Name),
+			},
+		},
+	}
 
-	return r.statusUpdate(ctx, app)
-}
+	if err := controllerutil.SetControllerReference(svc, ci, r.Scheme); err != nil {
+		return fmt.Errorf("set controller ref on CI: %w", err)
+	}
 
-func (r *AppReconciler) failWith(ctx context.Context, app App, reason, msg string) error {
-	if err := r.setFailed(ctx, app, reason, msg); err != nil {
+	if err := r.Create(ctx, ci); err != nil {
 		return err
 	}
 
-	return fmt.Errorf("%s: %s", reason, msg)
-}
-
-func (r *AppReconciler) setFailed(ctx context.Context, app App, reason, msg string) error {
-	app.SetAppPhase(koptanv1.AppPhaseFailed)
-	app.SetError(msg)
-
-	conditions := app.GetConditions()
-	meta.SetStatusCondition(conditions, metav1.Condition{
-		Type:               koptanv1.AppConditionDockerfileGenerated,
-		Status:             metav1.ConditionFalse,
-		Reason:             reason,
-		Message:            msg,
-		ObservedGeneration: app.GetGeneration(),
-	})
-
-	return r.statusUpdate(ctx, app)
-}
-
-func (r *AppReconciler) statusUpdate(ctx context.Context, app App) error {
-	return r.Status().Update(ctx, app.RuntimeObject())
-}
-
-func (r *AppReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := ctrl.NewControllerManagedBy(mgr).
-		For(&koptanv1.GoApp{}).
-		Owns(&corev1.ConfigMap{}).
-		Named("goapp").
-		Complete(reconcilerFunc(r.ReconcileGoApp)); err != nil {
-		return fmt.Errorf("setting up GoApp controller: %w", err)
-	}
-
-	if err := ctrl.NewControllerManagedBy(mgr).
-		For(&koptanv1.DotnetApp{}).
-		Owns(&corev1.ConfigMap{}).
-		Named("dotnetapp").
-		Complete(reconcilerFunc(r.ReconcileDotnetApp)); err != nil {
-		return fmt.Errorf("setting up DotnetApp controller: %w", err)
-	}
-
-	if err := ctrl.NewControllerManagedBy(mgr).
-		For(&koptanv1.JavaApp{}).
-		Owns(&corev1.ConfigMap{}).
-		Named("javaapp").
-		Complete(reconcilerFunc(r.ReconcileJavaApp)); err != nil {
-		return fmt.Errorf("setting up JavaApp controller: %w", err)
-	}
-
+	svc.Status.CIRef = ci.Name
 	return nil
 }
 
-type reconcilerFunc func(context.Context, ctrl.Request) (ctrl.Result, error)
+// updateCDRef finds the CD resource owned by this Service and updates the CDRef.
+func (r *ServiceReconciler) updateCDRef(ctx context.Context, svc *koptanv1.Service) {
+	var cdList koptanv1.CDList
+	if err := r.List(ctx, &cdList, client.InNamespace(svc.Namespace)); err != nil {
+		return
+	}
+	for _, cd := range cdList.Items {
+		for _, ref := range cd.OwnerReferences {
+			if ref.UID == svc.UID {
+				svc.Status.CDRef = cd.Name
+				return
+			}
+		}
+	}
+	// No owned CD found — clear the reference.
+	svc.Status.CDRef = ""
+}
 
-func (f reconcilerFunc) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return f(ctx, req)
+// patchStatus patches the Service status with the latest conditions.
+func (r *ServiceReconciler) patchStatus(ctx context.Context, svc *koptanv1.Service) error {
+	return r.Status().Update(ctx, svc)
+}
+
+// setPhase sets the phase and message on the Service status.
+func setPhase(ctx context.Context, svc *koptanv1.Service, phase koptanv1.ServicePhase, message string) {
+	svc.Status.Phase = phase
+	svc.Status.Message = message
+	if svc.Status.Conditions == nil {
+		svc.Status.Conditions = []metav1.Condition{}
+	}
+	meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionUnknown,
+		LastTransitionTime: metav1.Now(),
+		Reason:             string(phase),
+		Message:            message,
+	})
+}
+
+// setFailed marks the Service as Failed with the given reason and message.
+func (r *ServiceReconciler) setFailed(ctx context.Context, svc *koptanv1.Service, reason, msg string) {
+	svc.Status.Phase = koptanv1.ServicePhaseFailed
+	svc.Status.Error = msg
+	if svc.Status.Conditions == nil {
+		svc.Status.Conditions = []metav1.Condition{}
+	}
+	meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionFalse,
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            msg,
+	})
+	_ = r.patchStatus(ctx, svc)
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&koptanv1.Service{}).
+		Owns(&koptanv1.CI{}).
+		Owns(&koptanv1.CD{}).
+		Named("service").
+		Complete(r)
 }

@@ -18,9 +18,22 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.discoveredLanguage
-      name: Auto-Lang
+    - jsonPath: .status.serviceType
+      name: Language
       type: string
+    - jsonPath: .status.latestRevision
+      name: Revision
+      type: string
+    - jsonPath: .status.ciRef
+      name: CI
+      type: string
+    - jsonPath: .status.cdRef
+      name: CD
+      type: string
+    - jsonPath: .status.lastPushDetected
+      name: LastPush
+      priority: 1
+      type: date
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -243,6 +256,14 @@ spec:
             type: object
           status:
             properties:
+              cdRef:
+                description: CDRef is the name of the active CD CRD managing deployment
+                  for this Service.
+                type: string
+              ciRef:
+                description: CIRef is the name of the active CI CRD managing builds
+                  for this Service.
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -303,6 +324,17 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               error:
+                type: string
+              lastPushDetected:
+                description: LastPushDetected is the time the controller last detected
+                  a new commit.
+                format: date-time
+                type: string
+              latestRevision:
+                description: LatestRevision is the SHA of the last processed commit
+                  from the source repo.
+                type: string
+              message:
                 type: string
               phase:
                 enum:

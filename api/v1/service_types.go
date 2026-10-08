@@ -45,8 +45,27 @@ type ServiceStatus struct {
 	// +optional
 	ServiceType string `json:"serviceType,omitempty"`
 
+	// LatestRevision is the SHA of the last processed commit from the source repo.
+	// +optional
+	LatestRevision string `json:"latestRevision,omitempty"`
+
+	// LastPushDetected is the time the controller last detected a new commit.
+	// +optional
+	LastPushDetected *metav1.Time `json:"lastPushDetected,omitempty"`
+
+	// CIRef is the name of the active CI CRD managing builds for this Service.
+	// +optional
+	CIRef string `json:"ciRef,omitempty"`
+
+	// CDRef is the name of the active CD CRD managing deployment for this Service.
+	// +optional
+	CDRef string `json:"cdRef,omitempty"`
+
 	// +optional
 	Error string `json:"error,omitempty"`
+
+	// +optional
+	Message string `json:"message,omitempty"`
 
 	// +listType=map
 	// +listMapKey=type
@@ -57,7 +76,11 @@ type ServiceStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Auto-Lang",type=string,JSONPath=`.status.discoveredLanguage`
+// +kubebuilder:printcolumn:name="Language",type=string,JSONPath=`.status.serviceType`
+// +kubebuilder:printcolumn:name="Revision",type=string,JSONPath=`.status.latestRevision`
+// +kubebuilder:printcolumn:name="CI",type=string,JSONPath=`.status.ciRef`
+// +kubebuilder:printcolumn:name="CD",type=string,JSONPath=`.status.cdRef`
+// +kubebuilder:printcolumn:name="LastPush",type=date,JSONPath=`.status.lastPushDetected`,priority=1
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 type Service struct {

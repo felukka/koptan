@@ -15,6 +15,7 @@ const (
 	CDPhaseFailed    CDPhase = "Failed"
 )
 
+// Resources defines resource requests/limits for the deployment.
 type Resources struct {
 	// +optional
 	CPURequest *resource.Quantity `json:"cpuRequest,omitempty"`
@@ -29,9 +30,11 @@ type Resources struct {
 	MemoryLimit *resource.Quantity `json:"memoryLimit,omitempty"`
 }
 
+// CDSpec defines the desired state of a CD deployment.
 type CDSpec struct {
+	// CI references the CI CRD that provides the built image.
 	// +required
-	CI CI `json:"ci"`
+	CI NamespacedObjectReference `json:"ci"`
 
 	// +kubebuilder:default=1
 	// +optional
@@ -44,6 +47,7 @@ type CDSpec struct {
 	Resources *Resources `json:"resources,omitempty"`
 }
 
+// CDStatus defines the observed state of a CD deployment.
 type CDStatus struct {
 	Phase      CDPhase            `json:"phase,omitempty"`
 	Revision   string             `json:"latestRevision,omitempty"`
@@ -55,7 +59,9 @@ type CDStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.deployedImage`
+// +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.latestImage`
+// +kubebuilder:printcolumn:name="Revision",type=string,JSONPath=`.status.latestRevision`
+// +kubebuilder:printcolumn:name="CI",type=string,JSONPath=`.spec.ci.name`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 type CD struct {
