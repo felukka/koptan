@@ -1,0 +1,46 @@
+import { fetchApiRef, useApi } from '@backstage/frontend-plugin-api';
+import type {
+  CreatePipelineRequest,
+  Overview,
+  Pipeline,
+} from '@internal/plugin-koptan-common';
+import { useCallback } from 'react';
+
+async function json<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      message = body?.error?.message ?? message;
+    } catch {
+      // keep the status text
+    }
+    throw new Error(message);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Calls the koptan backend plugin through the Backstage fetch API. */
+export function useKoptanApi() {
+  const { fetch } = useApi(fetchApiRef);
+  const getOverview = useCallback(
+    async () => json<Overview>(await fetch('plugin://koptan/overview')),
+    [fetch],
+  );
+  const getPipelines = useCallback(
+    async () => json<Pipeline[]>(await fetch('plugin://koptan/pipelines')),
+    [fetch],
+  );
+  const createPipeline = useCallback(
+    async (req: CreatePipelineRequest) =>
+      json<Pipeline>(
+        await fetch('plugin://koptan/pipelines', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req),
+        }),
+      ),
+    [fetch],
+  );
+  return { getOverview, getPipelines, createPipeline };
+}

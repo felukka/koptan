@@ -59,6 +59,9 @@ backend.add(import('@backstage/plugin-search-backend-module-techdocs'));
 // kubernetes plugin
 backend.add(import('@backstage/plugin-kubernetes-backend'));
 
+// koptan plugin (reads/creates Koptan CRs via the Kubernetes API)
+backend.add(import('@internal/plugin-koptan-backend'));
+
 // user settings plugin
 backend.add(import('@backstage/plugin-user-settings-backend'));
 

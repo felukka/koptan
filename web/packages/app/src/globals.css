@@ -1,69 +1,88 @@
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("./fonts/Manrope/Manrope-VariableFont_wght.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("./fonts/Space_Grotesk/SpaceGrotesk-VariableFont_wght.ttf")
+    format("truetype");
+}
+
 :root,
 [data-theme-mode="dark"] {
-  color-scheme: dark;
+  color-scheme: dark;
 
-  --bui-font-weight-regular: 400;
-  --bui-font-weight-bold: 600;
+  --bui-font-regular: "Manrope", sans-serif;
+  --bui-font-mono: "Space Grotesk", sans-serif;
+  --bui-font-weight-regular: 400;
+  --bui-font-weight-bold: 600;
 
-  --bui-radius-1: 0.125rem;
-  --bui-radius-2: 0.25rem;
-  --bui-radius-3: 0.5rem;
-  --bui-radius-4: 0.75rem;
-  --bui-radius-full: 9999px;
+  --bui-radius-1: 0.125rem;
+  --bui-radius-2: 0.25rem;
+  --bui-radius-3: 0.5rem;
+  --bui-radius-4: 0.75rem;
+  --bui-radius-full: 9999px;
 
-  --bui-bg-app: #0e1419;
+  --bui-bg-app: #0e1419;
 
-  --bui-bg-neutral-1: #161c22;
-  --bui-bg-neutral-2: #1a2026;
-  --bui-bg-neutral-3: #242b30;
-  --bui-bg-neutral-4: #2f353b;
+  --bui-bg-neutral-1: #161c22;
+  --bui-bg-neutral-2: #1a2026;
+  --bui-bg-neutral-3: #242b30;
+  --bui-bg-neutral-4: #2f353b;
 
-  --bui-bg-neutral-1-hover: #1a2026;
-  --bui-bg-neutral-1-pressed: #242b30;
+  --bui-bg-neutral-1-hover: #1a2026;
+  --bui-bg-neutral-1-pressed: #242b30;
 
-  --bui-bg-solid: #eac07d;
-  --bui-bg-solid-hover: #ffdead;
-  --bui-fg-solid: #432c00;
+  --bui-bg-solid: #eac07d;
+  --bui-bg-solid-hover: #ffdead;
+  --bui-fg-solid: #432c00;
 
-  --bui-fg-primary: #dde3ea;
-  --bui-fg-secondary: #b1c9e0;
-  --bui-fg-disabled: #8d9198;
+  --bui-fg-primary: #dde3ea;
+  --bui-fg-secondary: #b1c9e0;
+  --bui-fg-disabled: #8d9198;
 
-  --bui-border-1: rgba(67, 71, 77, 0.4);
-  --bui-border-2: rgba(141, 145, 152, 0.4);
+  --bui-border-1: rgba(67, 71, 77, 0.4);
+  --bui-border-2: rgba(141, 145, 152, 0.4);
 
-  --bui-bg-danger: #93000a;
-  --bui-bg-warning: #795920;
-  --bui-bg-success: #1d3f5e;
-  --bui-bg-info: #344b5e;
+  --bui-bg-danger: #93000a;
+  --bui-bg-warning: #795920;
+  --bui-bg-success: #1d3f5e;
+  --bui-bg-info: #344b5e;
 
-  --bui-fg-danger: #ffb4ab;
-  --bui-fg-warning: #eac07d;
-  --bui-fg-success: #a9c9ef;
-  --bui-fg-info: #b1c9e0;
+  --bui-fg-danger: #ffb4ab;
+  --bui-fg-warning: #eac07d;
+  --bui-fg-success: #a9c9ef;
+  --bui-fg-info: #b1c9e0;
 
-  --bui-border-danger: #ffb4ab;
-  --bui-border-info: #b1c9e0;
+  --bui-border-danger: #ffb4ab;
+  --bui-border-info: #b1c9e0;
 
-  --celestial-tertiary: #a9c9ef;
-  --celestial-primary: #eac07d;
-  --celestial-glass-bg: rgba(47, 53, 59, 0.6);
+  --celestial-tertiary: #a9c9ef;
+  --celestial-primary: #eac07d;
+  --celestial-glass-bg: rgba(47, 53, 59, 0.6);
 }
 
 html,
 body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  font-family: var(--bui-font-regular);
-  background-color: var(--bui-bg-app);
-  color: var(--bui-fg-primary);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: var(--bui-font-regular);
+  background-color: var(--bui-bg-app);
+  color: var(--bui-fg-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1,
@@ -72,154 +91,155 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--bui-font-mono);
-  margin: 0;
-  font-weight: var(--bui-font-weight-bold);
-  letter-spacing: 0.02em;
+  font-family: var(--bui-font-mono);
+  margin: 0;
+  font-weight: var(--bui-font-weight-bold);
+  letter-spacing: 0.02em;
 }
 
 p {
-  margin: 0;
+  margin: 0;
 }
 
 .material-symbols-outlined {
-  font-weight: 400;
-  font-style: normal;
-  font-size: inherit;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  text-transform: none;
-  letter-spacing: normal;
-  word-wrap: normal;
-  white-space: nowrap;
-  direction: ltr;
-  flex-shrink: 0;
-  -webkit-font-smoothing: antialiased;
+  font-weight: 400;
+  font-style: normal;
+  font-size: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+  flex-shrink: 0;
+  -webkit-font-smoothing: antialiased;
 }
 
+[class*="MuiTypography-h"],
 .bui-Typography[data-variant^="h"] {
-  font-family: var(--bui-font-mono);
+  font-family: var(--bui-font-mono);
 }
 
 .bui-Button {
-  border-radius: var(--bui-radius-2);
-  font-family: var(--bui-font-mono);
-  transition: box-shadow 0.3s ease;
+  border-radius: var(--bui-radius-2);
+  font-family: var(--bui-font-mono);
+  transition: box-shadow 0.3s ease;
 }
 
 .bui-Button[data-variant="primary"]:hover {
-  box-shadow: 0 0 12px 2px rgba(234, 192, 125, 0.3);
+  box-shadow: 0 0 12px 2px rgba(234, 192, 125, 0.3);
 }
 
 .bui-Dialog {
-  background-color: var(--celestial-glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--bui-border-1);
+  background-color: var(--celestial-glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--bui-border-1);
 }
 
 .glass-effect {
-  background-color: var(--celestial-glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background-color: var(--celestial-glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .horizon-line {
-  height: 0.125rem;
-  background: linear-gradient(
-    to right,
-    var(--celestial-tertiary),
-    var(--celestial-primary)
-  );
+  height: 0.125rem;
+  background: linear-gradient(
+    to right,
+    var(--celestial-tertiary),
+    var(--celestial-primary)
+  );
 }
 
 .glitch-effect {
-  position: relative;
-  animation: glitch 3s infinite linear alternate-reverse;
+  position: relative;
+  animation: glitch 3s infinite linear alternate-reverse;
 }
 
 .nautical-grain {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-repeat: repeat;
-  background-size: 200px 200px;
-  opacity: 0.04;
-  pointer-events: none;
-  z-index: 50;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-repeat: repeat;
+  background-size: 200px 200px;
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 50;
 }
 
 .sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 @keyframes glitch {
-  0% {
-    transform: translate(0);
-  }
-  20% {
-    transform: translate(-2px, 2px);
-  }
-  40% {
-    transform: translate(-2px, -2px);
-  }
-  60% {
-    transform: translate(2px, 2px);
-  }
-  80% {
-    transform: translate(2px, -2px);
-  }
-  100% {
-    transform: translate(0);
-  }
+  0% {
+    transform: translate(0);
+  }
+  20% {
+    transform: translate(-2px, 2px);
+  }
+  40% {
+    transform: translate(-2px, -2px);
+  }
+  60% {
+    transform: translate(2px, 2px);
+  }
+  80% {
+    transform: translate(2px, -2px);
+  }
+  100% {
+    transform: translate(0);
+  }
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideInUp {
-  from {
-    transform: translateY(10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .fade-in {
-  animation: fadeIn 0.3s ease-in-out;
+  animation: fadeIn 0.3s ease-in-out;
 }
 
 .slide-in-up {
-  animation: slideInUp 0.3s ease-in-out;
+  animation: slideInUp 0.3s ease-in-out;
 }
 
 @media print {
-  body {
-    background: white;
-    color: black;
-  }
-  .no-print {
-    display: none;
-  }
+  body {
+    background: white;
+    color: black;
+  }
+  .no-print {
+    display: none;
+  }
 }

@@ -5,7 +5,7 @@ metadata:
   name: koptan
   description: Koptan, your autonomous autopilot for your cluster.
   annotations:
-    github.com/project-slug: backstage/backstage
+    github.com/project-slug: felukka/koptan
     backstage.io/techdocs-ref: dir:../docs
 spec:
   type: website

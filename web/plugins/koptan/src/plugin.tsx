@@ -1,3 +1,4 @@
+import { RiShipLine } from '@remixicon/react';
 import {
   createFrontendPlugin,
   PageBlueprint,
@@ -8,11 +9,11 @@ import { rootRouteRef } from './routes';
 export const page = PageBlueprint.make({
   params: {
     path: '/koptan',
+    title: 'Koptan',
+    icon: <RiShipLine />,
     routeRef: rootRouteRef,
     loader: () =>
-      import('./components/TodoPage').then(m => (
-        <m.TodoPage />
-      )),
+      import('./components/KoptanRoutes').then((m) => <m.KoptanRoutes />),
   },
 });
 
@@ -21,5 +22,5 @@ export const koptanPlugin = createFrontendPlugin({
   extensions: [page],
   routes: {
     root: rootRouteRef,
-  }
+  },
 });

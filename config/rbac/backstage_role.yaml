@@ -1,0 +1,24 @@
+# Permissions for the Backstage backend plugin (web/plugins/koptan-backend).
+# Bind this ClusterRole to the service account Backstage uses to reach the cluster.
+# It lists every Koptan resource and can create an app, slipway and voyage from the UI.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: koptan
+    app.kubernetes.io/managed-by: kustomize
+  name: backstage-role
+rules:
+  - apiGroups:
+      - koptan.felukka.org
+    resources:
+      - goapps
+      - javaapps
+      - dotnetapps
+      - slipways
+      - voyages
+    verbs:
+      - get
+      - list
+      - watch
+      - create

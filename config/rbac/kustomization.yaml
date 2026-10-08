@@ -22,6 +22,10 @@ resources:
   # default, aiding admins in cluster management. Those roles are
   # not used by the koptan itself. You can comment the following lines
   # if you do not want those helpers be installed with your Project.
+  - backstage_role.yaml
+  - slipway_admin_role.yaml
+  - slipway_editor_role.yaml
+  - slipway_viewer_role.yaml
   - voyage_admin_role.yaml
   - voyage_editor_role.yaml
   - voyage_viewer_role.yaml
