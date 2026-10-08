@@ -32,18 +32,18 @@ export async function createRouter(options: {
   router.use(express.json());
 
   router.get('/overview', async (_req, res) => {
-    const { apps, slipways, voyages } = await loadAll(client, namespace);
-    res.json(buildOverview(apps, slipways, voyages));
+    const { services, cis, cds } = await loadAll(client, namespace);
+    res.json(buildOverview(services, cis, cds));
   });
 
   router.get('/pipelines', async (_req, res) => {
-    const { apps, slipways, voyages } = await loadAll(client, namespace);
-    res.json(buildPipelines(apps, slipways, voyages));
+    const { services, cis, cds } = await loadAll(client, namespace);
+    res.json(buildPipelines(services, cis, cds));
   });
 
   router.get('/activity', async (_req, res) => {
-    const { apps, slipways, voyages } = await loadAll(client, namespace);
-    res.json(buildActivity(apps, slipways, voyages));
+    const { services, cis, cds } = await loadAll(client, namespace);
+    res.json(buildActivity(services, cis, cds));
   });
 
   router.get('/cluster', async (_req, res) => {

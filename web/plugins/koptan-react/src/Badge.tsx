@@ -18,8 +18,8 @@ export const Badge = ({
   children: ReactNode;
 }) => <span className={`mz-badge mz-badge--${variant}`}>{children}</span>;
 
-/** The badge colour for an app kind. */
-export const kindVariant = (kind: string): BadgeVariant =>
-  (({ GoApp: 'go', JavaApp: 'java', DotnetApp: 'dotnet' })[kind] as
-    | BadgeVariant
-    | undefined) ?? 'default';
+/** The badge colour for a detected language (Service status.serviceType). */
+export const kindVariant = (language: string): BadgeVariant =>
+  (({ go: 'go', java: 'java', dotnet: 'dotnet', '.net': 'dotnet' })[
+    language.toLowerCase()
+  ] as BadgeVariant | undefined) ?? 'default';

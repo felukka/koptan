@@ -9,13 +9,13 @@ export const RaseefRoutes = () => {
   const navigate = useNavigate();
   const drawerOpen = !!useMatch('/raseef/new');
   const active = (pipelines.value ?? []).filter(
-    (p) => p.voyage?.status?.phase === 'Running',
+    (p) => p.cd?.status?.phase === 'Running',
   ).length;
 
   return (
     <KoptanPage
       title="The Raseef"
-      description="Visualizing managed deployment pipelines across the cluster. Tracking slipway status and voyage stability."
+      description="Visualizing managed deployment pipelines across the cluster. Tracking service, build and deployment status."
       actions={
         <>
           <Link to="/raseef/new" className="mz-glow">
@@ -23,7 +23,7 @@ export const RaseefRoutes = () => {
           </Link>
           <div className="mz-pill">
             <span className="mz-dot mz-dot--pulse" />
-            <span className="mz-label">Active Voyages: {active}</span>
+            <span className="mz-label">Active Deployments: {active}</span>
           </div>
         </>
       }

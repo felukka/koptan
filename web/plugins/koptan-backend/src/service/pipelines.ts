@@ -1,13 +1,11 @@
-import {
-  type ActivityEntry,
-  APP_KINDS,
-  type AppKind,
-  type CreatePipelineRequest,
-  type KoptanApp,
-  type Overview,
-  type Pipeline,
-  type Slipway,
-  type Voyage,
+import type {
+  ActivityEntry,
+  CD,
+  CI,
+  CreatePipelineRequest,
+  Overview,
+  Pipeline,
+  Service,
 } from '@internal/plugin-koptan-common';
 import { ConflictError, NotAllowedError } from '@backstage/errors';
 import type { KoptanClient, RawResource } from './crdClient';
@@ -24,67 +22,58 @@ function cleanMetadata(raw: RawResource): RawResource {
   return Object.keys(rest).length ? { ...meta, annotations: rest } : meta;
 }
 
-/** Removes the PAT so it is never sent to the browser. */
-export function redactApp(raw: RawResource): KoptanApp {
-  const { patToken: _omit, ...source } = raw.spec?.source ?? {};
-  return {
-    ...raw,
-    metadata: cleanMetadata(raw),
-    spec: { ...raw.spec, source },
-  } as KoptanApp;
+/** The secretRef only names a Secret, so nothing to strip beyond noise. */
+export function redactService(raw: RawResource): Service {
+  return { ...raw, metadata: cleanMetadata(raw) } as Service;
 }
 
-export function redactSlipway(raw: RawResource): Slipway {
-  const { creds: _omit, ...image } = raw.spec?.image ?? {};
+/** Drops the registry login so credentials never reach the browser. */
+export function redactCI(raw: RawResource): CI {
+  const { loginSecret: _omit, ...image } = raw.spec?.image ?? {};
   return {
     ...raw,
     metadata: cleanMetadata(raw),
     spec: { ...raw.spec, image },
-  } as Slipway;
+  } as CI;
 }
 
-export function redactVoyage(raw: RawResource): Voyage {
-  return { ...raw, metadata: cleanMetadata(raw) } as Voyage;
+export function redactCD(raw: RawResource): CD {
+  return { ...raw, metadata: cleanMetadata(raw) } as CD;
 }
 
 const key = (ns: string | undefined, name: string) => `${ns ?? ''}/${name}`;
 
 /**
- * Joins App -> Slipway (spec.appRef) -> Voyage (spec.slipwayRef).
- * An app can have several slipways and a slipway several voyages, so this
- * emits one pipeline per chain; an app or slipway with nothing downstream
- * still gets one entry.
+ * Joins Service -> CI (spec.service.name) -> CD (spec.ci.name).
+ * A service can have several CIs and a CI several CDs, so this emits one
+ * pipeline per chain; a service or CI with nothing downstream still gets one.
  */
 export function buildPipelines(
-  apps: KoptanApp[],
-  slipways: Slipway[],
-  voyages: Voyage[],
+  services: Service[],
+  cis: CI[],
+  cds: CD[],
 ): Pipeline[] {
   const group = <T>(items: T[], k: (item: T) => string) => {
     const m = new Map<string, T[]>();
     for (const i of items) m.set(k(i), [...(m.get(k(i)) ?? []), i]);
     return m;
   };
-  const slipwaysByApp = group(slipways, (s) =>
-    key(s.metadata.namespace, `${s.spec.appRef.kind}/${s.spec.appRef.name}`),
+  const cisByService = group(cis, (c) =>
+    key(c.metadata.namespace, c.spec.service.name),
   );
-  const voyagesBySlipway = group(voyages, (v) =>
-    key(v.metadata.namespace, v.spec.slipwayRef.name),
-  );
-  return apps.flatMap((app) => {
+  const cdsByCI = group(cds, (d) => key(d.metadata.namespace, d.spec.ci.name));
+  return services.flatMap((service) => {
     const mine =
-      slipwaysByApp.get(
-        key(app.metadata.namespace, `${app.kind}/${app.metadata.name}`),
+      cisByService.get(
+        key(service.metadata.namespace, service.metadata.name),
       ) ?? [];
-    if (mine.length === 0) return [{ app }];
-    return mine.flatMap((slipway) => {
-      const vs =
-        voyagesBySlipway.get(
-          key(slipway.metadata.namespace, slipway.metadata.name),
-        ) ?? [];
-      return vs.length === 0
-        ? [{ app, slipway }]
-        : vs.map((voyage) => ({ app, slipway, voyage }));
+    if (mine.length === 0) return [{ service }];
+    return mine.flatMap((ci) => {
+      const ds =
+        cdsByCI.get(key(ci.metadata.namespace, ci.metadata.name)) ?? [];
+      return ds.length === 0
+        ? [{ service, ci }]
+        : ds.map((cd) => ({ service, ci, cd }));
     });
   });
 }
@@ -99,30 +88,30 @@ function countByPhase(items: { status?: { phase?: string } }[]) {
 }
 
 export function buildOverview(
-  apps: KoptanApp[],
-  slipways: Slipway[],
-  voyages: Voyage[],
+  services: Service[],
+  cis: CI[],
+  cds: CD[],
 ): Overview {
   return {
-    apps: { total: apps.length, byPhase: countByPhase(apps) },
-    slipways: { total: slipways.length, byPhase: countByPhase(slipways) },
-    voyages: { total: voyages.length, byPhase: countByPhase(voyages) },
+    services: { total: services.length, byPhase: countByPhase(services) },
+    cis: { total: cis.length, byPhase: countByPhase(cis) },
+    cds: { total: cds.length, byPhase: countByPhase(cds) },
     replicas: {
-      desired: voyages.reduce((n, v) => n + (v.spec.replicas ?? 1), 0),
+      desired: cds.reduce((n, d) => n + (d.spec.replicas ?? 1), 0),
     },
   };
 }
 
 export async function loadAll(client: KoptanClient, namespace?: string) {
-  const [appLists, slipways, voyages] = await Promise.all([
-    Promise.all(APP_KINDS.map((k) => client.list(k, namespace))),
-    client.list('Slipway', namespace),
-    client.list('Voyage', namespace),
+  const [services, cis, cds] = await Promise.all([
+    client.list('Service', namespace),
+    client.list('CI', namespace),
+    client.list('CD', namespace),
   ]);
   return {
-    apps: appLists.flat().map(redactApp),
-    slipways: slipways.map(redactSlipway),
-    voyages: voyages.map(redactVoyage),
+    services: services.map(redactService),
+    cis: cis.map(redactCI),
+    cds: cds.map(redactCD),
   };
 }
 
@@ -130,87 +119,45 @@ const DNS_LABEL = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 
 export function validateCreate(req: CreatePipelineRequest): string | undefined {
   if (!DNS_LABEL.test(req.name ?? '')) return 'name must be a DNS-1123 label';
-  if (!APP_KINDS.includes(req.kind))
-    return 'kind must be GoApp, JavaApp or DotnetApp';
-  if (!req.source?.repo) return 'source.repo is required';
-  if (!req.slipway?.registry || !req.slipway?.image)
-    return 'slipway.registry and slipway.image are required';
-  if (
-    !Number.isInteger(req.voyage?.port) ||
-    req.voyage.port < 1 ||
-    req.voyage.port > 65535
-  )
-    return 'voyage.port must be 1-65535';
-  if (!!req.slipway.username !== !!req.slipway.password)
-    return 'slipway.username and slipway.password must be set together';
-  if (req.voyage.healthCheckPath && !req.voyage.healthCheckPath.startsWith('/'))
-    return 'voyage.healthCheckPath must start with /';
-  if (
-    req.voyage.replicas !== undefined &&
-    (!Number.isInteger(req.voyage.replicas) || req.voyage.replicas < 0)
-  )
-    return 'voyage.replicas must be a non-negative integer';
+  if (!req.repo) return 'repo is required';
+  for (const e of req.env ?? []) {
+    if (!e.name) return 'env variables need a name';
+  }
   return undefined;
 }
 
-/** Creates the App, Slipway and Voyage, all named after the app. */
+/** Creates the Service; the operator derives its CI and CD. */
 export async function createPipeline(
   client: KoptanClient,
   req: CreatePipelineRequest,
   createdBy: string,
 ): Promise<Pipeline> {
   const namespace = req.namespace ?? 'default';
-  const metadata = {
-    name: req.name,
-    namespace,
-    annotations: { 'koptan.felukka.org/created-by': createdBy },
-  };
-  // The operator reads the git token from a Secret named by source.patToken
-  // (key "token"), so store it as one instead of putting it in the spec.
-  const { patToken, ...source } = req.source;
-  if (patToken) {
+  // The operator reads the git token from a Secret, so store it as one
+  // instead of putting it in the spec.
+  if (req.token) {
     await client.createSecret(namespace, `${req.name}-git`, {
-      token: patToken,
+      token: req.token,
     });
   }
-  const app = await client.create(req.kind as AppKind, namespace, {
-    metadata,
+  const service = await client.create('Service', namespace, {
+    metadata: {
+      name: req.name,
+      namespace,
+      annotations: { 'koptan.felukka.org/created-by': createdBy },
+    },
     spec: {
-      ...req.appSpec,
       source: {
-        ...source,
-        ...(patToken ? { patToken: `${req.name}-git` } : {}),
+        repo: req.repo,
+        ...(req.revision ? { revision: req.revision } : {}),
+        ...(req.token
+          ? { secretRef: { name: `${req.name}-git`, key: 'token' } }
+          : {}),
       },
+      ...(req.env?.length ? { env: req.env } : {}),
     },
   });
-  const { registry, image, username, password } = req.slipway;
-  const slipway = await client.create('Slipway', namespace, {
-    metadata,
-    spec: {
-      appRef: { name: req.name, kind: req.kind },
-      image: {
-        registry,
-        name: image,
-        ...(username && password ? { creds: { username, password } } : {}),
-      },
-    },
-  });
-  const voyage = await client.create('Voyage', namespace, {
-    metadata,
-    spec: {
-      slipwayRef: { name: req.name },
-      port: req.voyage.port,
-      replicas: req.voyage.replicas,
-      ...(req.voyage.healthCheckPath
-        ? { healthCheck: { path: req.voyage.healthCheckPath } }
-        : {}),
-    },
-  });
-  return {
-    app: redactApp({ kind: req.kind, ...app }),
-    slipway: redactSlipway(slipway),
-    voyage: redactVoyage(voyage),
-  };
+  return { service: redactService({ kind: 'Service', ...service }) };
 }
 
 type Stamped = {
@@ -221,16 +168,17 @@ type Stamped = {
     error?: string;
     message?: string;
     latestImage?: string;
-    deployedImage?: string;
     lastBuildTime?: string;
+    lastPushDetected?: string;
     conditions?: { lastTransitionTime?: string }[];
   };
 };
 
-/** Newest timestamp on a resource: last build, a condition, or creation. */
+/** Newest timestamp on a resource: last build or push, a condition, or creation. */
 function lastTouched(r: Stamped): string {
   const times = [
     r.status?.lastBuildTime,
+    r.status?.lastPushDetected,
     ...(r.status?.conditions ?? []).map((c) => c.lastTransitionTime),
     r.metadata.creationTimestamp,
   ].filter((t): t is string => !!t);
@@ -250,43 +198,43 @@ function describe(
       severity: 'error',
     };
   }
-  if (kind === 'App') {
+  if (kind === 'Service') {
     return phase === 'Ready'
-      ? { message: `Dockerfile ready for ${name}`, severity: 'success' }
-      : { message: `${name} is ${phase ?? 'new'}`, severity: 'info' };
+      ? { message: `Service ${name} is ready`, severity: 'success' }
+      : { message: `Service ${name} is ${phase ?? 'new'}`, severity: 'info' };
   }
-  if (kind === 'Slipway') {
+  if (kind === 'CI') {
     return phase === 'Succeeded'
       ? {
-          message: `Slipway build completed for ${name}${
+          message: `Build completed for ${name}${
             r.status?.latestImage ? ` (${r.status.latestImage})` : ''
           }`,
           severity: 'success',
         }
-      : { message: `Slipway ${name} is ${phase ?? 'new'}`, severity: 'info' };
+      : { message: `Build ${name} is ${phase ?? 'new'}`, severity: 'info' };
   }
   return phase === 'Running'
     ? {
-        message: `Voyage ${name} is running${
-          r.status?.deployedImage ? ` ${r.status.deployedImage}` : ''
+        message: `Deployment ${name} is running${
+          r.status?.latestImage ? ` ${r.status.latestImage}` : ''
         }`,
         severity: 'success',
       }
-    : { message: `Voyage ${name} is ${phase ?? 'new'}`, severity: 'info' };
+    : { message: `Deployment ${name} is ${phase ?? 'new'}`, severity: 'info' };
 }
 
 /** A recent-activity feed derived from the current state of each resource. */
 export function buildActivity(
-  apps: KoptanApp[],
-  slipways: Slipway[],
-  voyages: Voyage[],
+  services: Service[],
+  cis: CI[],
+  cds: CD[],
   limit = 20,
 ): ActivityEntry[] {
   const entries = (
     [
-      ['App', apps],
-      ['Slipway', slipways],
-      ['Voyage', voyages],
+      ['Service', services],
+      ['CI', cis],
+      ['CD', cds],
     ] as const
   ).flatMap(([kind, items]) =>
     (items as Stamped[]).map((r) => ({
@@ -306,7 +254,7 @@ export function friendlyError(e: unknown, req: CreatePipelineRequest): unknown {
   const ns = req.namespace ?? 'default';
   if (code === 409) {
     return new ConflictError(
-      `"${req.name}" already exists in namespace "${ns}" (an app, slipway, voyage or secret with that name)`,
+      `"${req.name}" already exists in namespace "${ns}" (a service or secret with that name)`,
     );
   }
   if (code === 403) {

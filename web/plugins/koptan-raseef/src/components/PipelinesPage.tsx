@@ -29,10 +29,10 @@ const Arrow = () => (
   </div>
 );
 
-/** In-cluster address of the Service the operator creates for a voyage. */
+/** In-cluster address of the Service the operator creates for a CD (port 80). */
 const endpoint = (p: Pipeline) =>
-  p.voyage
-    ? `http://${p.voyage.metadata.name}.${p.voyage.metadata.namespace ?? 'default'}.svc.cluster.local:${p.voyage.spec.port}`
+  p.cd
+    ? `http://${p.cd.metadata.name}.${p.cd.metadata.namespace ?? 'default'}.svc.cluster.local`
     : undefined;
 
 const progress = (phase?: string) =>
@@ -42,76 +42,84 @@ const progress = (phase?: string) =>
       ? 50
       : undefined;
 
-const OriginCard = ({ app }: { app: Pipeline['app'] }) => (
+const OriginCard = ({ service }: { service: Pipeline['service'] }) => (
   <div className="mz-card">
     <div className="mz-card-title">
       <span style={{ color: 'var(--mz-secondary)' }}>
         <Icon name="code" />
       </span>
-      <span className="mz-label">App Origin</span>
+      <span className="mz-label">Service Origin</span>
     </div>
     <div className="mz-card-corner">
-      <Phase phase={app.status?.phase} />
+      <Phase phase={service.status?.phase} />
     </div>
-    <Field label="Source Repository">{app.spec.source.repo}</Field>
+    <Field label="Source Repository">{service.spec.source.repo}</Field>
     <Field label="Active Revision">
-      <span className="mz-code">{app.spec.source.revision ?? 'main'}</span>
+      <span className="mz-code">{service.spec.source.revision ?? 'main'}</span>
     </Field>
-    {app.status?.error && (
-      <div className="mz-error-text">{app.status.error}</div>
+    {service.status?.latestRevision && (
+      <Field label="Latest Commit">
+        <span className="mz-code">
+          {service.status.latestRevision.slice(0, 12)}
+        </span>
+      </Field>
+    )}
+    {(service.status?.error ||
+      (service.status?.phase === 'Failed' && service.status.message)) && (
+      <div className="mz-error-text">
+        {service.status?.error ?? service.status?.message}
+      </div>
     )}
   </div>
 );
 
-const SlipwayCard = ({ slipway }: { slipway?: Pipeline['slipway'] }) => (
-  <div className={`mz-card${slipway ? '' : ' mz-card--faded'}`}>
+const CICard = ({ ci }: { ci?: Pipeline['ci'] }) => (
+  <div className={`mz-card${ci ? '' : ' mz-card--faded'}`}>
     <div className="mz-card-title">
       <span style={{ color: 'var(--mz-secondary)' }}>
         <Icon name="precision_manufacturing" />
       </span>
-      <span className="mz-label">Slipway CI</span>
+      <span className="mz-label">CI Build</span>
     </div>
-    {slipway ? (
+    {ci ? (
       <>
         <div className="mz-card-corner">
-          <Phase phase={slipway.status?.phase} />
+          <Phase phase={ci.status?.phase} />
         </div>
-        <Field label="Pipeline ID">{slipway.metadata.name}</Field>
-        <Field label="Artifact Path">
-          {slipway.status?.latestImage ?? '—'}
-        </Field>
-        <Field label="Builds">{slipway.status?.buildCount ?? 0}</Field>
-        {progress(slipway.status?.phase) !== undefined && (
+        <Field label="Pipeline ID">{ci.metadata.name}</Field>
+        <Field label="Artifact Path">{ci.status?.latestImage ?? '—'}</Field>
+        <Field label="Builds">{ci.status?.buildCount ?? 0}</Field>
+        {progress(ci.status?.phase) !== undefined && (
           <div className="mz-bar">
-            <div style={{ width: `${progress(slipway.status?.phase)}%` }} />
+            <div style={{ width: `${progress(ci.status?.phase)}%` }} />
           </div>
         )}
-        {slipway.status?.message && (
+        {ci.status?.message && (
           <div
             className={
-              slipway.status.phase === 'Failed'
+              ci.status.phase === 'Failed'
                 ? 'mz-error-text'
                 : 'mz-muted mz-label'
             }
           >
-            {slipway.status.message}
+            {ci.status.message}
           </div>
         )}
       </>
     ) : (
-      <span className="mz-muted">No slipway</span>
+      <span className="mz-muted">No CI yet</span>
     )}
   </div>
 );
 
-const VoyageCard = ({ pipeline }: { pipeline: Pipeline }) => {
-  const { voyage } = pipeline;
-  const phase = voyage?.status?.phase;
+const CDCard = ({ pipeline }: { pipeline: Pipeline }) => {
+  const { cd } = pipeline;
+  const phase = cd?.status?.phase;
   const active = phaseTone(phase) === 'ok';
-  const target = voyage?.spec.replicas ?? 1;
+  const target = cd?.spec.replicas ?? 1;
   return (
     <div
-      className={`mz-card${voyage ? (active ? ' mz-card--active' : '') : ' mz-card--faded'}`}
+      className={`mz-card${cd ? (active ? ' mz-card--active' : '') : ' mz-card--faded'}`}
     >
       <div className="mz-card-title">
         <span
@@ -125,10 +133,10 @@ const VoyageCard = ({ pipeline }: { pipeline: Pipeline }) => {
           className="mz-label"
           style={{ color: active ? 'var(--mz-primary)' : undefined }}
         >
-          Voyage CD
+          CD Deploy
         </span>
       </div>
-      {voyage ? (
+      {cd ? (
         <>
           <div className="mz-card-corner">
             <Phase phase={phase} />
@@ -150,7 +158,7 @@ const VoyageCard = ({ pipeline }: { pipeline: Pipeline }) => {
             </div>
           </Field>
           <Field label="Image">
-            {voyage.status?.deployedImage ?? 'Not deployed'}
+            {cd.status?.latestImage ?? 'Not deployed'}
           </Field>
           <div className="mz-actions">
             <button
@@ -172,7 +180,7 @@ const VoyageCard = ({ pipeline }: { pipeline: Pipeline }) => {
           </div>
         </>
       ) : (
-        <span className="mz-muted">No voyage</span>
+        <span className="mz-muted">No CD yet</span>
       )}
     </div>
   );
@@ -185,31 +193,35 @@ const PipelineRow = ({
   pipeline: Pipeline;
   index: number;
 }) => {
-  const { app, voyage } = pipeline;
+  const { service, cd } = pipeline;
   return (
     <div className="mz-pipeline">
       <div className="mz-pipeline-head">
         <div className="mz-pipeline-name">
           <span className="mz-muted">{String(index + 1).padStart(2, '0')}</span>
-          {app.metadata.name}
-          <Badge variant={kindVariant(app.kind)}>{app.kind}</Badge>
+          {service.metadata.name}
+          {service.status?.serviceType && (
+            <Badge variant={kindVariant(service.status.serviceType)}>
+              {service.status.serviceType}
+            </Badge>
+          )}
         </div>
         <div className="mz-label mz-label--dim">
-          {app.metadata.namespace} / {voyage?.metadata.name ?? 'no voyage'}
+          {service.metadata.namespace} / {cd?.metadata.name ?? 'no cd'}
         </div>
       </div>
       <div className="mz-flow">
-        <OriginCard app={app} />
+        <OriginCard service={service} />
         <Arrow />
-        <SlipwayCard slipway={pipeline.slipway} />
+        <CICard ci={pipeline.ci} />
         <Arrow />
-        <VoyageCard pipeline={pipeline} />
+        <CDCard pipeline={pipeline} />
       </div>
     </div>
   );
 };
 
-/** Loads the pipelines and renders them as App -> Slipway -> Voyage rows. */
+/** Loads the pipelines and renders them as Service -> CI -> CD rows. */
 export const usePipelines = () => {
   const { getPipelines } = useKoptanApi();
   return useAsyncRetry(getPipelines, [getPipelines]);
@@ -230,7 +242,7 @@ export const PipelinesList = ({
   }
   if (!value?.length) {
     return (
-      <span className="mz-muted">No Koptan apps found in the cluster.</span>
+      <span className="mz-muted">No Koptan services found in the cluster.</span>
     );
   }
   return (
@@ -238,10 +250,10 @@ export const PipelinesList = ({
       {value.map((p, i) => (
         <PipelineRow
           key={[
-            p.app.metadata.namespace,
-            p.app.metadata.name,
-            p.slipway?.metadata.name,
-            p.voyage?.metadata.name,
+            p.service.metadata.namespace,
+            p.service.metadata.name,
+            p.ci?.metadata.name,
+            p.cd?.metadata.name,
           ].join('/')}
           pipeline={p}
           index={i}

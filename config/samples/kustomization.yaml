@@ -1,3 +1,4 @@
 resources:
-  - felukka_v1alpha_slipway.yaml
-  - felukka_v1alpha_voyage.yaml
+  - koptan_v1_service.yaml
+  - koptan_v1_ci.yaml
+  - koptan_v1_cd.yaml

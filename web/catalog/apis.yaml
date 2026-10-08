@@ -1,0 +1,26 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: koptan-kubernetes-api
+  title: Koptan Kubernetes API
+  description: Kubernetes custom-resource API exposed by the Koptan operator.
+  annotations:
+    github.com/project-slug: felukka/koptan
+    koptan.dev/api-kind: kubernetes-custom-resources
+  tags:
+    - kubernetes
+    - custom-resource
+spec:
+  type: custom
+  lifecycle: experimental
+  owner: platform-team
+  system: koptan
+  definition: |-
+    Koptan currently exposes Kubernetes custom resources in the
+    felukka.org/v1alpha1 API group, including:
+    - Voyage
+    - GoApp
+    - JavaApp
+    - DotnetApp
+    - Slipway

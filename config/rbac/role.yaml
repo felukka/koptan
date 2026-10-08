@@ -7,32 +7,18 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - configmaps
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - services
   verbs:
   - create
   - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
   - get
   - list
   - patch
@@ -53,11 +39,9 @@ rules:
 - apiGroups:
   - koptan.felukka.org
   resources:
-  - dotnetapps
-  - goapps
-  - javaapps
-  - slipways
-  - voyages
+  - cds
+  - cis
+  - services
   verbs:
   - create
   - delete
@@ -69,21 +53,17 @@ rules:
 - apiGroups:
   - koptan.felukka.org
   resources:
-  - dotnetapps/finalizers
-  - goapps/finalizers
-  - javaapps/finalizers
-  - slipways/finalizers
-  - voyages/finalizers
+  - cds/finalizers
+  - cis/finalizers
+  - services/finalizers
   verbs:
   - update
 - apiGroups:
   - koptan.felukka.org
   resources:
-  - dotnetapps/status
-  - goapps/status
-  - javaapps/status
-  - slipways/status
-  - voyages/status
+  - cds/status
+  - cis/status
+  - services/status
   verbs:
   - get
   - patch

@@ -1,0 +1,13 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: koptan
+  title: Koptan Platform
+  description: Kubernetes-native application delivery and platform engineering system.
+  tags:
+    - kubernetes
+    - platform-engineering
+    - developer-platform
+spec:
+  owner: platform-team

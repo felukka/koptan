@@ -52,7 +52,7 @@ const MetricsBar = ({
   overview: Overview;
   cluster?: ClusterInfo;
 }) => {
-  const running = overview.voyages.byPhase.Running ?? 0;
+  const running = overview.cds.byPhase.Running ?? 0;
   return (
     <section className="mz-panel mz-panel--gold">
       <div className="mz-metrics">
@@ -80,7 +80,7 @@ const MetricsBar = ({
         <Metric label="Active Deployments">
           <span className="mz-dot mz-dot--ok" />
           {running}
-          <Dim>/ {overview.voyages.total}</Dim>
+          <Dim>/ {overview.cds.total}</Dim>
         </Metric>
       </div>
       {cluster?.error && (
@@ -99,7 +99,7 @@ const Deployments = ({ pipelines }: { pipelines: Pipeline[] }) => (
         <thead>
           <tr>
             <th>Name</th>
-            <th>Kind</th>
+            <th>Language</th>
             <th>Replicas</th>
             <th>Status</th>
             <th className="mz-right">Actions</th>
@@ -109,33 +109,39 @@ const Deployments = ({ pipelines }: { pipelines: Pipeline[] }) => (
           {pipelines.length === 0 && (
             <tr>
               <td colSpan={5} className="mz-muted">
-                No Koptan apps found in the cluster.
+                No Koptan services found in the cluster.
               </td>
             </tr>
           )}
-          {pipelines.map(({ app, slipway, voyage }) => (
+          {pipelines.map(({ service, ci, cd }) => (
             <tr
               key={[
-                app.metadata.namespace,
-                app.metadata.name,
-                slipway?.metadata.name,
-                voyage?.metadata.name,
+                service.metadata.namespace,
+                service.metadata.name,
+                ci?.metadata.name,
+                cd?.metadata.name,
               ].join('/')}
             >
               <td>
-                <div style={{ fontWeight: 700 }}>{app.metadata.name}</div>
+                <div style={{ fontWeight: 700 }}>{service.metadata.name}</div>
                 <div className="mz-label mz-label--dim">
-                  ID: {voyage?.metadata.name ?? app.metadata.name}
+                  ID: {cd?.metadata.name ?? service.metadata.name}
                 </div>
               </td>
               <td>
-                <Badge variant={kindVariant(app.kind)}>{app.kind}</Badge>
+                {service.status?.serviceType ? (
+                  <Badge variant={kindVariant(service.status.serviceType)}>
+                    {service.status.serviceType}
+                  </Badge>
+                ) : (
+                  <span className="mz-muted">detecting…</span>
+                )}
               </td>
               <td className="mz-mono">
-                {voyage ? `${voyage.spec.replicas ?? 1} target` : '—'}
+                {cd ? `${cd.spec.replicas ?? 1} target` : '—'}
               </td>
               <td>
-                <Phase phase={voyage?.status?.phase ?? app.status?.phase} />
+                <Phase phase={cd?.status?.phase ?? service.status?.phase} />
               </td>
               <td className="mz-right">
                 <Link to="/raseef" className="mz-link-btn">
@@ -170,7 +176,7 @@ const ActivityLog = ({ entries }: { entries: ActivityEntry[] }) => (
   </Section>
 );
 
-/** "The Bay": central command for apps, builds and deployments. */
+/** "The Bay": central command for services, builds and deployments. */
 export const BayPage = () => {
   const { getOverview, getPipelines, getActivity, getCluster } = useKoptanApi();
   const { value, loading, error } = useAsync(async () => {
@@ -199,9 +205,9 @@ export const BayPage = () => {
           ? 'Cluster unreachable.'
           : value?.pipelines.some(
                 (p) =>
-                  p.voyage?.status?.phase === 'Failed' ||
-                  p.slipway?.status?.phase === 'Failed' ||
-                  p.app.status?.phase === 'Failed',
+                  p.cd?.status?.phase === 'Failed' ||
+                  p.ci?.status?.phase === 'Failed' ||
+                  p.service.status?.phase === 'Failed',
               )
             ? 'Rough seas, something failed.'
             : 'Steady as she goes.'}

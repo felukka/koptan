@@ -16,7 +16,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	v1alpha "github.com/felukka/koptan/api/v1alpha"
+	koptanv1 "github.com/felukka/koptan/api/v1"
 	"github.com/felukka/koptan/internal/controller"
 )
 
@@ -27,7 +27,8 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(v1alpha.AddToScheme(scheme))
+	utilruntime.Must(koptanv1.AddToScheme(scheme))
+	// +kubebuilder:scaffold:scheme
 }
 
 func main() {
@@ -50,7 +51,7 @@ func main() {
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "Webhook key file name.")
 	flag.StringVar(&metricsCertPath, "metrics-cert-path", "", "Metrics certificate directory.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "Metrics certificate file name.")
-	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "Metrics key file name.")
+	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "Metrics certificate key file name.")
 
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
@@ -97,29 +98,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.AppReconciler{
+	if err := (&controller.ServiceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "App")
+		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)
 	}
 
-	if err := (&controller.SlipwayReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Slipway")
+	if err := controller.NewCIReconciler(mgr.GetClient(), mgr.GetScheme()).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CI")
 		os.Exit(1)
 	}
 
-	if err := (&controller.VoyageReconciler{
+	if err := (&controller.CDReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Voyage")
+		setupLog.Error(err, "unable to create controller", "controller", "CD")
 		os.Exit(1)
 	}
+
+	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")

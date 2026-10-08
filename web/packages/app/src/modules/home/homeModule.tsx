@@ -7,8 +7,8 @@ const content = `
 
 Koptan builds and deploys apps straight from a git repo.
 
-- **Bay**: a fleet overview of apps, builds and deployments
-- **Raseef**: each app's pipeline, and the New deployment form
+- **Bay**: a fleet overview of services, builds and deployments
+- **Raseef**: each service's pipeline, and the New deployment form
 - **Scan Bay** and **Signal Mast**: coming soon
 
 [Koptan on GitHub](https://github.com/felukka/koptan)

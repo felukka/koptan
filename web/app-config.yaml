@@ -143,20 +143,14 @@ kubernetes:
     - type: localKubectlProxy
   customResources:
     - group: koptan.felukka.org
-      apiVersion: v1alpha
-      plural: goapps
+      apiVersion: v1
+      plural: services
     - group: koptan.felukka.org
-      apiVersion: v1alpha
-      plural: javaapps
+      apiVersion: v1
+      plural: cis
     - group: koptan.felukka.org
-      apiVersion: v1alpha
-      plural: dotnetapps
-    - group: koptan.felukka.org
-      apiVersion: v1alpha
-      plural: slipways
-    - group: koptan.felukka.org
-      apiVersion: v1alpha
-      plural: voyages
+      apiVersion: v1
+      plural: cds
 # Koptan plugin (web/plugins/koptan-backend). Uses your kubeconfig, or the pod's
 # service account in-cluster. Both settings are optional.
 # koptan:

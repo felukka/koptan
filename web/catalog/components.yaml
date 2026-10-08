@@ -1,0 +1,48 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: koptan-portal
+  title: Koptan Portal
+  description: Backstage developer portal for the Koptan platform.
+  annotations:
+    github.com/project-slug: felukka/koptan
+    backstage.io/techdocs-ref: dir:../../docs
+    koptan.dev/component-kind: portal
+    koptan.dev/platform: koptan
+  tags:
+    - backstage
+    - developer-portal
+    - typescript
+spec:
+  type: website
+  lifecycle: experimental
+  owner: platform-team
+  system: koptan
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: koptan-operator
+  title: Koptan Kubernetes Operator
+  description: Kubernetes operator that manages Koptan application resources and platform
+    workflows.
+  annotations:
+    github.com/project-slug: felukka/koptan
+    backstage.io/techdocs-ref: dir:../../docs
+    koptan.dev/component-kind: operator
+    koptan.dev/platform: koptan
+    koptan.dev/repository: github.com/felukka/koptan
+  tags:
+    - go
+    - kubernetes
+    - kubebuilder
+    - operator
+spec:
+  type: service
+  lifecycle: experimental
+  owner: platform-team
+  system: koptan
+  dependsOn:
+    - resource:koptan/kubernetes-api
+    - resource:koptan/koptan-crds

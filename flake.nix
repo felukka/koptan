@@ -56,7 +56,7 @@
 
             nativeBuildInputs = with pkgs; [
               nodejs
-              yarn
+              yarn-berry
             ];
 
             buildPhase = ''
@@ -124,8 +124,8 @@
               go-tools
               gotools
               kubebuilder
-              nodejs_22
-              yarn
+              nodejs
+              yarn-berry
               typescript
               typescript-language-server
               biome

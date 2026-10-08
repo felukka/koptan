@@ -1,0 +1,9 @@
+apiVersion: koptan.felukka.org/v1
+kind: Service
+metadata:
+  name: example-service
+  namespace: default
+spec:
+  source:
+    repo: "https://github.com/example/repo.git"
+    revision: "main"
