@@ -1,5 +1,11 @@
-import { CustomObjectsApi, KubeConfig } from '@kubernetes/client-node';
 import {
+  CoreV1Api,
+  CustomObjectsApi,
+  KubeConfig,
+  VersionApi,
+} from '@kubernetes/client-node';
+import {
+  type ClusterInfo,
   KOPTAN_GROUP,
   KOPTAN_PLURALS,
   KOPTAN_VERSION,
@@ -19,22 +25,46 @@ export interface KoptanClient {
     namespace: string,
     body: RawResource,
   ): Promise<RawResource>;
+  /** Creates an Opaque Secret holding the given string data. */
+  createSecret(
+    namespace: string,
+    name: string,
+    data: Record<string, string>,
+  ): Promise<void>;
+  clusterInfo(): Promise<ClusterInfo>;
 }
 
 export class KubeKoptanClient implements KoptanClient {
-  private readonly api: CustomObjectsApi;
+  private cached?: CustomObjectsApi;
+  private loaded?: KubeConfig;
 
-  constructor(kubeConfig: KubeConfig) {
-    this.api = kubeConfig.makeApiClient(CustomObjectsApi);
+  /** Takes a loader so a missing or broken kubeconfig also fails per request. */
+  constructor(private readonly source: KubeConfig | (() => KubeConfig)) {}
+
+  private get kubeConfig(): KubeConfig {
+    this.loaded ??=
+      typeof this.source === 'function' ? this.source() : this.source;
+    return this.loaded;
+  }
+
+  /**
+   * Built on first use, so the backend still starts without a usable cluster
+   * (for example no current kube context); requests then fail with the reason.
+   */
+  private get api(): CustomObjectsApi {
+    this.cached ??= this.kubeConfig.makeApiClient(CustomObjectsApi);
+    return this.cached;
   }
 
   static fromDefault(context?: string): KubeKoptanClient {
-    const kc = new KubeConfig();
-    kc.loadFromDefault();
-    if (context) {
-      kc.setCurrentContext(context);
-    }
-    return new KubeKoptanClient(kc);
+    return new KubeKoptanClient(() => {
+      const kc = new KubeConfig();
+      kc.loadFromDefault();
+      if (context) {
+        kc.setCurrentContext(context);
+      }
+      return kc;
+    });
   }
 
   async list(kind: KoptanKind, namespace?: string): Promise<RawResource[]> {
@@ -68,5 +98,40 @@ export class KubeKoptanClient implements KoptanClient {
         ...body,
       },
     })) as RawResource;
+  }
+
+  async createSecret(
+    namespace: string,
+    name: string,
+    data: Record<string, string>,
+  ): Promise<void> {
+    await this.kubeConfig.makeApiClient(CoreV1Api).createNamespacedSecret({
+      namespace,
+      body: { metadata: { name, namespace }, type: 'Opaque', stringData: data },
+    });
+  }
+
+  async clusterInfo(): Promise<ClusterInfo> {
+    const info: ClusterInfo = { nodes: { total: 0, ready: 0 } };
+    const errors: string[] = [];
+    try {
+      const v = await this.kubeConfig.makeApiClient(VersionApi).getCode();
+      info.kubernetesVersion = v.gitVersion;
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+    try {
+      const nodes = await this.kubeConfig.makeApiClient(CoreV1Api).listNode();
+      info.nodes.total = nodes.items.length;
+      info.nodes.ready = nodes.items.filter((n) =>
+        n.status?.conditions?.some(
+          (c) => c.type === 'Ready' && c.status === 'True',
+        ),
+      ).length;
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+    if (errors.length) info.error = errors.join('; ');
+    return info;
   }
 }

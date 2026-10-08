@@ -89,6 +89,7 @@ export interface Voyage {
     port: number;
     replicas?: number;
     env?: { name: string; value?: string }[];
+    healthCheck?: { path?: string; port?: number };
   };
   status?: {
     phase?: VoyagePhase;
@@ -119,6 +120,35 @@ export interface CreatePipelineRequest {
   source: SourceRef;
   /** Language-specific app spec fields (goVersion, entrypoint, env, ...). */
   appSpec?: Record<string, unknown>;
-  slipway: { registry: string; image: string };
-  voyage: { port: number; replicas?: number };
+  slipway: {
+    registry: string;
+    image: string;
+    /** Registry credentials; the CRD stores them in the Slipway spec. */
+    username?: string;
+    password?: string;
+  };
+  voyage: {
+    port: number;
+    replicas?: number;
+    /** HTTP path probed for health, e.g. /healthz. */
+    healthCheckPath?: string;
+  };
+}
+
+/** Cluster facts shown in the Bay metrics bar. */
+export interface ClusterInfo {
+  kubernetesVersion?: string;
+  nodes: { total: number; ready: number };
+  /** Set when the cluster could not be queried for these facts. */
+  error?: string;
+}
+
+/** One line of the Bay activity log, newest first. */
+export interface ActivityEntry {
+  time: string;
+  kind: 'App' | 'Slipway' | 'Voyage';
+  name: string;
+  namespace?: string;
+  message: string;
+  severity: 'info' | 'success' | 'error';
 }

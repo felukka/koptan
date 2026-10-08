@@ -243,3 +243,11 @@ p {
     display: none;
   }
 }
+
+/* Minzar sidebar: uppercase, tracked labels */
+a[aria-label] > .MuiTypography-subtitle2 {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: var(--bui-font-mono);
+  font-size: 11px;
+}

@@ -7,23 +7,34 @@ import {
   SidebarSpace,
 } from '@backstage/core-components';
 import { NavContentBlueprint } from '@backstage/plugin-app-react';
-import { SidebarLogo } from './SidebarLogo';
-import MenuIcon from '@material-ui/icons/Menu';
-import SearchIcon from '@material-ui/icons/Search';
+import { NotificationsSidebarItem } from '@backstage/plugin-notifications';
 import { SidebarSearchModal } from '@backstage/plugin-search';
 import { UserSettingsSignInAvatar } from '@backstage/plugin-user-settings';
-import { NotificationsSidebarItem } from '@backstage/plugin-notifications';
+import { identityApiRef, useApi } from '@backstage/frontend-plugin-api';
+import ExitToAppIcon from '@material-ui/icons/ExitToApp';
+import SearchIcon from '@material-ui/icons/Search';
+import MenuIcon from '@material-ui/icons/Menu';
+import { SidebarLogo } from './SidebarLogo';
+
+/** Koptan's pages, in the order they appear in the sidebar. */
+const KOPTAN_PAGES = [
+  'page:koptan-bay',
+  'page:koptan-raseef',
+  'page:koptan-scan-bay',
+  'page:koptan-signal-mast',
+];
 
 export const SidebarContent = NavContentBlueprint.make({
   params: {
     component: ({ navItems }) => {
-      const nav = navItems.withComponent(item => (
+      const identityApi = useApi(identityApiRef);
+      const nav = navItems.withComponent((item) => (
         <SidebarItem icon={() => item.icon} to={item.href} text={item.title} />
       ));
 
-      // Skipped items
-      nav.take('page:search'); // Using search modal instead
-      nav.take('page:notifications'); // Using NotificationsSidebarItem manually instead
+      // Rendered by hand below
+      nav.take('page:search');
+      nav.take('page:notifications');
 
       return (
         <Sidebar>
@@ -32,11 +43,10 @@ export const SidebarContent = NavContentBlueprint.make({
             <SidebarSearchModal />
           </SidebarGroup>
           <SidebarDivider />
-          <SidebarGroup label="Menu" icon={<MenuIcon />}>
-            {nav.take('page:home')}
-            {nav.take('page:catalog')}
-            {nav.take('page:scaffolder')}
+          <SidebarGroup label="Koptan" icon={<MenuIcon />}>
+            {KOPTAN_PAGES.map((id) => nav.take(id))}
             <SidebarDivider />
+            {nav.take('page:home')}
             <SidebarScrollWrapper>
               {nav.rest({ sortBy: 'title' })}
             </SidebarScrollWrapper>
@@ -45,6 +55,11 @@ export const SidebarContent = NavContentBlueprint.make({
           <SidebarDivider />
           <NotificationsSidebarItem />
           <SidebarDivider />
+          <SidebarItem
+            icon={ExitToAppIcon}
+            text="Sign out"
+            onClick={() => identityApi.signOut()}
+          />
           <SidebarGroup
             label="Settings"
             icon={<UserSettingsSignInAvatar />}

@@ -1,9 +1,6 @@
-# The Plugins Folder
+# Plugins
 
-This is where your own plugins and their associated modules live, each in a
-separate folder of its own.
-
-If you want to create a new plugin here, go to your project root directory, run
-the command `yarn new`, and follow the on-screen instructions.
-
-You can also check out existing plugins on [the plugin marketplace](https://backstage.io/plugins)!
+- `koptan-common`: shared types and the `koptan.pipeline.create` permission.
+- `koptan-backend`: reads and creates the Koptan CRs through the Kubernetes API.
+- `koptan-react`: shared frontend code (API hook, `Phase`, `KoptanPage`).
+- `koptan-bay`, `koptan-raseef`, `koptan-scan-bay`, `koptan-signal-mast`: one frontend plugin per page.

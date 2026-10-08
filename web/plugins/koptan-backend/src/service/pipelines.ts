@@ -1,4 +1,5 @@
 import {
+  type ActivityEntry,
   APP_KINDS,
   type AppKind,
   type CreatePipelineRequest,
@@ -8,6 +9,7 @@ import {
   type Slipway,
   type Voyage,
 } from '@internal/plugin-koptan-common';
+import { ConflictError, NotAllowedError } from '@backstage/errors';
 import type { KoptanClient, RawResource } from './crdClient';
 
 const LAST_APPLIED = 'kubectl.kubernetes.io/last-applied-configuration';
@@ -139,6 +141,15 @@ export function validateCreate(req: CreatePipelineRequest): string | undefined {
     req.voyage.port > 65535
   )
     return 'voyage.port must be 1-65535';
+  if (!!req.slipway.username !== !!req.slipway.password)
+    return 'slipway.username and slipway.password must be set together';
+  if (req.voyage.healthCheckPath && !req.voyage.healthCheckPath.startsWith('/'))
+    return 'voyage.healthCheckPath must start with /';
+  if (
+    req.voyage.replicas !== undefined &&
+    (!Number.isInteger(req.voyage.replicas) || req.voyage.replicas < 0)
+  )
+    return 'voyage.replicas must be a non-negative integer';
   return undefined;
 }
 
@@ -154,15 +165,34 @@ export async function createPipeline(
     namespace,
     annotations: { 'koptan.felukka.org/created-by': createdBy },
   };
+  // The operator reads the git token from a Secret named by source.patToken
+  // (key "token"), so store it as one instead of putting it in the spec.
+  const { patToken, ...source } = req.source;
+  if (patToken) {
+    await client.createSecret(namespace, `${req.name}-git`, {
+      token: patToken,
+    });
+  }
   const app = await client.create(req.kind as AppKind, namespace, {
     metadata,
-    spec: { ...req.appSpec, source: req.source },
+    spec: {
+      ...req.appSpec,
+      source: {
+        ...source,
+        ...(patToken ? { patToken: `${req.name}-git` } : {}),
+      },
+    },
   });
+  const { registry, image, username, password } = req.slipway;
   const slipway = await client.create('Slipway', namespace, {
     metadata,
     spec: {
       appRef: { name: req.name, kind: req.kind },
-      image: { registry: req.slipway.registry, name: req.slipway.image },
+      image: {
+        registry,
+        name: image,
+        ...(username && password ? { creds: { username, password } } : {}),
+      },
     },
   });
   const voyage = await client.create('Voyage', namespace, {
@@ -171,6 +201,9 @@ export async function createPipeline(
       slipwayRef: { name: req.name },
       port: req.voyage.port,
       replicas: req.voyage.replicas,
+      ...(req.voyage.healthCheckPath
+        ? { healthCheck: { path: req.voyage.healthCheckPath } }
+        : {}),
     },
   });
   return {
@@ -178,4 +211,108 @@ export async function createPipeline(
     slipway: redactSlipway(slipway),
     voyage: redactVoyage(voyage),
   };
+}
+
+type Stamped = {
+  kind?: string;
+  metadata: { name: string; namespace?: string; creationTimestamp?: string };
+  status?: {
+    phase?: string;
+    error?: string;
+    message?: string;
+    latestImage?: string;
+    deployedImage?: string;
+    lastBuildTime?: string;
+    conditions?: { lastTransitionTime?: string }[];
+  };
+};
+
+/** Newest timestamp on a resource: last build, a condition, or creation. */
+function lastTouched(r: Stamped): string {
+  const times = [
+    r.status?.lastBuildTime,
+    ...(r.status?.conditions ?? []).map((c) => c.lastTransitionTime),
+    r.metadata.creationTimestamp,
+  ].filter((t): t is string => !!t);
+  return times.sort().at(-1) ?? '';
+}
+
+function describe(
+  kind: ActivityEntry['kind'],
+  r: Stamped,
+): Pick<ActivityEntry, 'message' | 'severity'> {
+  const phase = r.status?.phase;
+  const name = r.metadata.name;
+  if (phase === 'Failed') {
+    const why = r.status?.error ?? r.status?.message;
+    return {
+      message: `${kind} ${name} failed${why ? `: ${why}` : ''}`,
+      severity: 'error',
+    };
+  }
+  if (kind === 'App') {
+    return phase === 'Ready'
+      ? { message: `Dockerfile ready for ${name}`, severity: 'success' }
+      : { message: `${name} is ${phase ?? 'new'}`, severity: 'info' };
+  }
+  if (kind === 'Slipway') {
+    return phase === 'Succeeded'
+      ? {
+          message: `Slipway build completed for ${name}${
+            r.status?.latestImage ? ` (${r.status.latestImage})` : ''
+          }`,
+          severity: 'success',
+        }
+      : { message: `Slipway ${name} is ${phase ?? 'new'}`, severity: 'info' };
+  }
+  return phase === 'Running'
+    ? {
+        message: `Voyage ${name} is running${
+          r.status?.deployedImage ? ` ${r.status.deployedImage}` : ''
+        }`,
+        severity: 'success',
+      }
+    : { message: `Voyage ${name} is ${phase ?? 'new'}`, severity: 'info' };
+}
+
+/** A recent-activity feed derived from the current state of each resource. */
+export function buildActivity(
+  apps: KoptanApp[],
+  slipways: Slipway[],
+  voyages: Voyage[],
+  limit = 20,
+): ActivityEntry[] {
+  const entries = (
+    [
+      ['App', apps],
+      ['Slipway', slipways],
+      ['Voyage', voyages],
+    ] as const
+  ).flatMap(([kind, items]) =>
+    (items as Stamped[]).map((r) => ({
+      time: lastTouched(r),
+      kind,
+      name: r.metadata.name,
+      namespace: r.metadata.namespace,
+      ...describe(kind, r),
+    })),
+  );
+  return entries.sort((a, b) => b.time.localeCompare(a.time)).slice(0, limit);
+}
+
+/** Turns Kubernetes API failures into short, readable errors. */
+export function friendlyError(e: unknown, req: CreatePipelineRequest): unknown {
+  const code = (e as { code?: number }).code;
+  const ns = req.namespace ?? 'default';
+  if (code === 409) {
+    return new ConflictError(
+      `"${req.name}" already exists in namespace "${ns}" (an app, slipway, voyage or secret with that name)`,
+    );
+  }
+  if (code === 403) {
+    return new NotAllowedError(
+      'The service account used by Backstage is not allowed to create these resources; see config/rbac/backstage_role.yaml',
+    );
+  }
+  return e;
 }

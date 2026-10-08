@@ -1,0 +1,229 @@
+import { Progress } from '@backstage/core-components';
+import type {
+  ActivityEntry,
+  ClusterInfo,
+  Overview,
+  Pipeline,
+} from '@internal/plugin-koptan-common';
+import {
+  Badge,
+  Icon,
+  KoptanPage,
+  Phase,
+  Section,
+  kindVariant,
+  useKoptanApi,
+} from '@internal/plugin-koptan-react';
+import { Link } from 'react-router-dom';
+import useAsync from 'react-use/esm/useAsync';
+
+const Metric = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <div>
+    <div className="mz-metric-label">{label}</div>
+    <div className="mz-metric-value">{children}</div>
+  </div>
+);
+
+const Dim = ({ children }: { children: React.ReactNode }) => (
+  <span className="mz-muted" style={{ fontSize: 10 }}>
+    {children}
+  </span>
+);
+
+const when = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const time = d.toLocaleTimeString([], { hour12: false });
+  return d.toDateString() === new Date().toDateString()
+    ? time
+    : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+};
+
+const MetricsBar = ({
+  overview,
+  cluster,
+}: {
+  overview: Overview;
+  cluster?: ClusterInfo;
+}) => {
+  const running = overview.voyages.byPhase.Running ?? 0;
+  return (
+    <section className="mz-panel mz-panel--gold">
+      <div className="mz-metrics">
+        <div className="mz-panel-title">
+          <span style={{ color: 'var(--mz-primary)' }}>
+            <Icon name="query_stats" filled />
+          </span>
+          <span className="mz-label">Core Metrics</span>
+        </div>
+        <div className="mz-divider" />
+        <Metric label="Node Count">
+          {cluster && !cluster.error ? cluster.nodes.ready : '—'}
+          <Dim>/ {cluster && !cluster.error ? cluster.nodes.total : '—'}</Dim>
+        </Metric>
+        <Metric label="Koptan Operator">
+          <span className="mz-dot mz-dot--warn" />
+          <span className="mz-muted">not reported</span>
+        </Metric>
+        <Metric label="Kube API Version">
+          <span
+            className={`mz-dot ${cluster?.kubernetesVersion ? 'mz-dot--ok' : 'mz-dot--warn'}`}
+          />
+          {cluster?.kubernetesVersion ?? '—'}
+        </Metric>
+        <Metric label="Active Deployments">
+          <span className="mz-dot mz-dot--ok" />
+          {running}
+          <Dim>/ {overview.voyages.total}</Dim>
+        </Metric>
+      </div>
+      {cluster?.error && (
+        <div className="mz-error-text">
+          Cluster details unavailable: {cluster.error}
+        </div>
+      )}
+    </section>
+  );
+};
+
+const Deployments = ({ pipelines }: { pipelines: Pipeline[] }) => (
+  <Section icon={<Icon name="deployed_code" />} title="Managed Deployments">
+    <div style={{ overflowX: 'auto' }}>
+      <table className="mz-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Kind</th>
+            <th>Replicas</th>
+            <th>Status</th>
+            <th className="mz-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pipelines.length === 0 && (
+            <tr>
+              <td colSpan={5} className="mz-muted">
+                No Koptan apps found in the cluster.
+              </td>
+            </tr>
+          )}
+          {pipelines.map(({ app, slipway, voyage }) => (
+            <tr
+              key={[
+                app.metadata.namespace,
+                app.metadata.name,
+                slipway?.metadata.name,
+                voyage?.metadata.name,
+              ].join('/')}
+            >
+              <td>
+                <div style={{ fontWeight: 700 }}>{app.metadata.name}</div>
+                <div className="mz-label mz-label--dim">
+                  ID: {voyage?.metadata.name ?? app.metadata.name}
+                </div>
+              </td>
+              <td>
+                <Badge variant={kindVariant(app.kind)}>{app.kind}</Badge>
+              </td>
+              <td className="mz-mono">
+                {voyage ? `${voyage.spec.replicas ?? 1} target` : '—'}
+              </td>
+              <td>
+                <Phase phase={voyage?.status?.phase ?? app.status?.phase} />
+              </td>
+              <td className="mz-right">
+                <Link to="/raseef" className="mz-link-btn">
+                  Open pipeline
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </Section>
+);
+
+const ActivityLog = ({ entries }: { entries: ActivityEntry[] }) => (
+  <Section icon={<Icon name="history_edu" />} title="Recent Activity Log">
+    {entries.length === 0 && <span className="mz-muted">Nothing yet.</span>}
+    {entries.map((e) => (
+      <div className="mz-log-row" key={`${e.kind}/${e.namespace}/${e.name}`}>
+        <div className="mz-log-time">{when(e.time)}</div>
+        <span
+          className={`mz-dot ${e.severity === 'error' ? 'mz-dot--bad' : e.severity === 'success' ? 'mz-dot--ok' : 'mz-dot--warn'}`}
+        />
+        <div style={{ flex: 1 }}>
+          <div className="mz-log-msg">{e.message}</div>
+          <div className="mz-log-sub">
+            {e.kind}: {e.namespace}/{e.name}
+          </div>
+        </div>
+      </div>
+    ))}
+  </Section>
+);
+
+/** "The Bay": central command for apps, builds and deployments. */
+export const BayPage = () => {
+  const { getOverview, getPipelines, getActivity, getCluster } = useKoptanApi();
+  const { value, loading, error } = useAsync(async () => {
+    const [overview, pipelines, activity] = await Promise.all([
+      getOverview(),
+      getPipelines(),
+      getActivity(),
+    ]);
+    // Cluster facts are best effort; the page works without them.
+    const cluster = await getCluster().catch(
+      (e): ClusterInfo => ({
+        nodes: { total: 0, ready: 0 },
+        error: (e as Error).message,
+      }),
+    );
+    return { overview, pipelines, activity, cluster };
+  }, [getOverview, getPipelines, getActivity, getCluster]);
+
+  const description = (
+    <>
+      Central command and telemetry orchestration.
+      <br />
+      Current state:{' '}
+      <span className="mz-accent">
+        {error
+          ? 'Cluster unreachable.'
+          : value?.pipelines.some(
+                (p) =>
+                  p.voyage?.status?.phase === 'Failed' ||
+                  p.slipway?.status?.phase === 'Failed' ||
+                  p.app.status?.phase === 'Failed',
+              )
+            ? 'Rough seas, something failed.'
+            : 'Steady as she goes.'}
+      </span>
+    </>
+  );
+
+  return (
+    <KoptanPage title="The Bay" description={description}>
+      {loading && <Progress />}
+      {error && (
+        <div className="mz-alert">
+          <strong>Could not load Koptan.</strong> {error.message}
+        </div>
+      )}
+      {value && (
+        <>
+          <MetricsBar overview={value.overview} cluster={value.cluster} />
+          <Deployments pipelines={value.pipelines} />
+          <ActivityLog entries={value.activity} />
+        </>
+      )}
+    </KoptanPage>
+  );
+};

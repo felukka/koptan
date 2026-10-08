@@ -3,35 +3,15 @@ import { HomePageWidgetBlueprint } from '@backstage/plugin-home-react/alpha';
 import { MarkdownContent } from '@backstage/core-components';
 
 const content = `
-## Welcome to Backstage! 👋
+## Welcome to Koptan
 
-Backstage is your developer portal — a single place to manage all your
-software, services, and documentation.
+Koptan builds and deploys apps straight from a git repo.
 
-### Quick Start
+- **Bay**: a fleet overview of apps, builds and deployments
+- **Raseef**: each app's pipeline, and the New deployment form
+- **Scan Bay** and **Signal Mast**: coming soon
 
-- **Explore the catalog** — Browse all your organization's software in
-  the [Software Catalog](/catalog)
-- **Create something new** — Use a [Software Template](/create) to
-  scaffold a new project in minutes
-- **Read the docs** — Find technical documentation for any service
-  right from its catalog page
-
-### Helpful Links
-
-- [Backstage Documentation](https://backstage.io/docs)
-- [Customizing Your Homepage](https://backstage.io/docs/getting-started/homepage)
-- [Adding Plugins](https://backstage.io/docs/plugins)
-- [Contributing](https://github.com/backstage/backstage/blob/master/CONTRIBUTING.md)
-
-### How to Edit This Card
-
-This widget is defined in \`packages/app/src/modules/home/homeModule.tsx\`.
-You can update the markdown content there to welcome your team with
-your own links and getting started tips.
-
-To remove this card entirely, delete the getting started widget and
-remove it from the home module's extensions array in this file.
+[Koptan on GitHub](https://github.com/felukka/koptan)
 `;
 
 const gettingStartedWidget = HomePageWidgetBlueprint.make({
@@ -39,7 +19,7 @@ const gettingStartedWidget = HomePageWidgetBlueprint.make({
   params: {
     name: 'GettingStarted',
     title: 'Getting Started',
-    description: 'Tips and links to help you get started with Backstage',
+    description: 'An introduction to the Koptan pages',
     components: async () => ({
       Content: () => <MarkdownContent content={content} />,
     }),
