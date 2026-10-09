@@ -1,0 +1,234 @@
+/* Minzar badges, status, activity log and pipeline cards. */
+/* ---- badges and status ---- */
+.mz-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mz-badge--default {
+  color: var(--mz-secondary);
+  background: var(--mz-surface-highest);
+  border-color: rgba(67, 71, 77, 0.2);
+}
+.mz-badge--primary {
+  color: var(--mz-primary);
+  background: rgba(234, 192, 125, 0.1);
+  border-color: rgba(234, 192, 125, 0.2);
+}
+.mz-badge--success {
+  color: var(--mz-success);
+  background: rgba(143, 217, 168, 0.1);
+  border-color: rgba(143, 217, 168, 0.2);
+}
+.mz-badge--warning {
+  color: var(--mz-warning);
+  background: rgba(242, 196, 109, 0.1);
+  border-color: rgba(242, 196, 109, 0.2);
+}
+.mz-badge--error {
+  color: var(--mz-error);
+  background: rgba(255, 180, 171, 0.1);
+  border-color: rgba(255, 180, 171, 0.2);
+}
+.mz-badge--go {
+  color: #8be9fd;
+  background: rgba(139, 233, 253, 0.1);
+  border-color: rgba(139, 233, 253, 0.2);
+}
+.mz-badge--java {
+  color: #ffb86c;
+  background: rgba(255, 184, 108, 0.1);
+  border-color: rgba(255, 184, 108, 0.2);
+}
+.mz-badge--dotnet {
+  color: #bd93f9;
+  background: rgba(189, 147, 249, 0.1);
+  border-color: rgba(189, 147, 249, 0.2);
+}
+.mz-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mz-font-headline);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.mz-status--ok {
+  color: var(--mz-primary);
+}
+.mz-status--warn {
+  color: var(--mz-secondary);
+}
+.mz-status--bad {
+  color: var(--mz-error);
+}
+
+/* ---- activity log ---- */
+.mz-log-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px;
+  border-radius: 4px;
+}
+.mz-log-row:hover {
+  background: rgba(36, 43, 48, 0.4);
+}
+.mz-log-time {
+  width: 96px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.5;
+  color: var(--mz-secondary);
+}
+.mz-log-msg {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+.mz-log-sub {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--mz-secondary);
+  opacity: 0.6;
+}
+
+/* ---- pipeline cards ---- */
+.mz-pipeline {
+  margin-bottom: 48px;
+}
+.mz-pipeline-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.mz-pipeline-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mz-font-headline);
+  font-size: 20px;
+  font-weight: 600;
+}
+.mz-flow {
+  display: grid;
+  grid-template-columns: 1fr 32px 1fr 32px 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+@media (max-width: 1000px) {
+  .mz-flow {
+    grid-template-columns: 1fr;
+  }
+  .mz-arrow {
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+}
+.mz-arrow {
+  align-self: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mz-surface-high);
+  border: 1px solid rgba(67, 71, 77, 0.3);
+  color: var(--mz-primary);
+}
+.mz-card {
+  position: relative;
+  background: var(--mz-surface-low);
+  border: 1px solid rgba(67, 71, 77, 0.2);
+  border-radius: 6px;
+  padding: 20px;
+  transition: border-color 0.15s;
+}
+.mz-card:hover {
+  border-color: rgba(234, 192, 125, 0.3);
+}
+.mz-card--active {
+  background: var(--mz-surface-high);
+  border: 2px solid rgba(234, 192, 125, 0.2);
+  box-shadow: 0 0 20px rgba(234, 192, 125, 0.05);
+}
+.mz-card--faded {
+  opacity: 0.55;
+}
+.mz-card-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.mz-card-corner {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.mz-field {
+  margin-bottom: 14px;
+}
+.mz-field-value {
+  margin-top: 4px;
+  font-size: 13px;
+  word-break: break-all;
+}
+.mz-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--mz-surface-high);
+  color: var(--mz-primary-container);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.mz-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mz-surface-highest);
+  overflow: hidden;
+  margin-top: 8px;
+}
+.mz-bar > div {
+  height: 100%;
+  background: var(--mz-primary);
+}
+.mz-replicas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.mz-replica {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--mz-surface-highest);
+  border: 1px solid rgba(67, 71, 77, 0.2);
+}
+.mz-replica--on {
+  background: var(--mz-primary);
+  border-color: transparent;
+}
+.mz-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+.mz-error-text {
+  color: var(--mz-error);
+  font-size: 12px;
+  margin-top: 6px;
+}

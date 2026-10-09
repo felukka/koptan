@@ -4358,40 +4358,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@internal/plugin-alerting@workspace:^, @internal/plugin-alerting@workspace:plugins/alerting":
-  version: 0.0.0-use.local
-  resolution: "@internal/plugin-alerting@workspace:plugins/alerting"
-  dependencies:
-    "@backstage/cli": "npm:^0.36.6"
-    "@backstage/core-components": "npm:^0.18.14"
-    "@backstage/frontend-plugin-api": "npm:^0.18.1"
-    "@backstage/ui": "npm:^0.18.0"
-    "@internal/plugin-koptan-common": "workspace:^"
-    "@internal/plugin-koptan-react": "workspace:^"
-    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
-    react-router-dom: "npm:^6.30.2"
-    react-use: "npm:^17.2.4"
-  peerDependencies:
-    react: ^16.13.1 || ^17.0.0 || ^18.0.0
-  languageName: unknown
-  linkType: soft
-
-"@internal/plugin-infrastructure@workspace:^, @internal/plugin-infrastructure@workspace:plugins/infrastructure":
-  version: 0.0.0-use.local
-  resolution: "@internal/plugin-infrastructure@workspace:plugins/infrastructure"
-  dependencies:
-    "@backstage/cli": "npm:^0.36.6"
-    "@backstage/frontend-plugin-api": "npm:^0.18.1"
-    "@backstage/frontend-test-utils": "npm:^0.6.4"
-    "@internal/plugin-koptan-react": "workspace:^"
-    "@testing-library/jest-dom": "npm:^6.0.0"
-    "@testing-library/react": "npm:^14.0.0"
-    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
-  peerDependencies:
-    react: ^16.13.1 || ^17.0.0 || ^18.0.0
-  languageName: unknown
-  linkType: soft
-
 "@internal/plugin-koptan-backend@workspace:^, @internal/plugin-koptan-backend@workspace:plugins/koptan-backend":
   version: 0.0.0-use.local
   resolution: "@internal/plugin-koptan-backend@workspace:plugins/koptan-backend"
@@ -4409,12 +4375,48 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@internal/plugin-koptan-bay@workspace:^, @internal/plugin-koptan-bay@workspace:plugins/koptan-bay":
+  version: 0.0.0-use.local
+  resolution: "@internal/plugin-koptan-bay@workspace:plugins/koptan-bay"
+  dependencies:
+    "@backstage/cli": "npm:^0.36.6"
+    "@backstage/core-components": "npm:^0.18.14"
+    "@backstage/frontend-plugin-api": "npm:^0.18.1"
+    "@backstage/ui": "npm:^0.18.0"
+    "@internal/plugin-koptan-common": "workspace:^"
+    "@internal/plugin-koptan-react": "workspace:^"
+    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
+    react-router-dom: "npm:^6.30.2"
+    react-use: "npm:^17.2.4"
+  peerDependencies:
+    react: ^16.13.1 || ^17.0.0 || ^18.0.0
+  languageName: unknown
+  linkType: soft
+
 "@internal/plugin-koptan-common@workspace:^, @internal/plugin-koptan-common@workspace:plugins/koptan-common":
   version: 0.0.0-use.local
   resolution: "@internal/plugin-koptan-common@workspace:plugins/koptan-common"
   dependencies:
     "@backstage/cli": "npm:^0.36.6"
     "@backstage/plugin-permission-common": "npm:^0.9.11"
+  languageName: unknown
+  linkType: soft
+
+"@internal/plugin-koptan-raseef@workspace:^, @internal/plugin-koptan-raseef@workspace:plugins/koptan-raseef":
+  version: 0.0.0-use.local
+  resolution: "@internal/plugin-koptan-raseef@workspace:plugins/koptan-raseef"
+  dependencies:
+    "@backstage/cli": "npm:^0.36.6"
+    "@backstage/core-components": "npm:^0.18.14"
+    "@backstage/frontend-plugin-api": "npm:^0.18.1"
+    "@backstage/ui": "npm:^0.18.0"
+    "@internal/plugin-koptan-common": "workspace:^"
+    "@internal/plugin-koptan-react": "workspace:^"
+    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
+    react-router-dom: "npm:^6.30.2"
+    react-use: "npm:^17.2.4"
+  peerDependencies:
+    react: ^16.13.1 || ^17.0.0 || ^18.0.0
   languageName: unknown
   linkType: soft
 
@@ -4433,9 +4435,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@internal/plugin-metrics@workspace:^, @internal/plugin-metrics@workspace:plugins/metrics":
+"@internal/plugin-koptan-scan-bay@workspace:^, @internal/plugin-koptan-scan-bay@workspace:plugins/koptan-scan-bay":
   version: 0.0.0-use.local
-  resolution: "@internal/plugin-metrics@workspace:plugins/metrics"
+  resolution: "@internal/plugin-koptan-scan-bay@workspace:plugins/koptan-scan-bay"
   dependencies:
     "@backstage/cli": "npm:^0.36.6"
     "@backstage/core-components": "npm:^0.18.14"
@@ -4451,43 +4453,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@internal/plugin-monitoring@workspace:^, @internal/plugin-monitoring@workspace:plugins/monitoring":
+"@internal/plugin-koptan-signal-mast@workspace:^, @internal/plugin-koptan-signal-mast@workspace:plugins/koptan-signal-mast":
   version: 0.0.0-use.local
-  resolution: "@internal/plugin-monitoring@workspace:plugins/monitoring"
-  dependencies:
-    "@backstage/cli": "npm:^0.36.6"
-    "@backstage/frontend-plugin-api": "npm:^0.18.1"
-    "@backstage/frontend-test-utils": "npm:^0.6.4"
-    "@internal/plugin-koptan-react": "workspace:^"
-    "@testing-library/jest-dom": "npm:^6.0.0"
-    "@testing-library/react": "npm:^14.0.0"
-    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
-  peerDependencies:
-    react: ^16.13.1 || ^17.0.0 || ^18.0.0
-  languageName: unknown
-  linkType: soft
-
-"@internal/plugin-scanning@workspace:^, @internal/plugin-scanning@workspace:plugins/scanning":
-  version: 0.0.0-use.local
-  resolution: "@internal/plugin-scanning@workspace:plugins/scanning"
-  dependencies:
-    "@backstage/cli": "npm:^0.36.6"
-    "@backstage/core-components": "npm:^0.18.14"
-    "@backstage/frontend-plugin-api": "npm:^0.18.1"
-    "@backstage/ui": "npm:^0.18.0"
-    "@internal/plugin-koptan-common": "workspace:^"
-    "@internal/plugin-koptan-react": "workspace:^"
-    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
-    react-router-dom: "npm:^6.30.2"
-    react-use: "npm:^17.2.4"
-  peerDependencies:
-    react: ^16.13.1 || ^17.0.0 || ^18.0.0
-  languageName: unknown
-  linkType: soft
-
-"@internal/plugin-service@workspace:^, @internal/plugin-service@workspace:plugins/service":
-  version: 0.0.0-use.local
-  resolution: "@internal/plugin-service@workspace:plugins/service"
+  resolution: "@internal/plugin-koptan-signal-mast@workspace:plugins/koptan-signal-mast"
   dependencies:
     "@backstage/cli": "npm:^0.36.6"
     "@backstage/core-components": "npm:^0.18.14"
@@ -10299,12 +10267,10 @@ __metadata:
     "@backstage/plugin-user-settings": "npm:^0.9.7"
     "@backstage/theme": "npm:^0.7.3"
     "@backstage/ui": "npm:^0.18.0"
-    "@internal/plugin-alerting": "workspace:^"
-    "@internal/plugin-infrastructure": "workspace:^"
-    "@internal/plugin-metrics": "workspace:^"
-    "@internal/plugin-monitoring": "workspace:^"
-    "@internal/plugin-scanning": "workspace:^"
-    "@internal/plugin-service": "workspace:^"
+    "@internal/plugin-koptan-bay": "workspace:^"
+    "@internal/plugin-koptan-raseef": "workspace:^"
+    "@internal/plugin-koptan-scan-bay": "workspace:^"
+    "@internal/plugin-koptan-signal-mast": "workspace:^"
     "@material-ui/core": "npm:^4.12.2"
     "@material-ui/icons": "npm:^4.9.1"
     "@playwright/test": "npm:^1.32.3"

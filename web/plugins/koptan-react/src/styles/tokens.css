@@ -1,0 +1,47 @@
+/* Minzar look for the Koptan pages. Tokens come from koptan-ui/src/styles/globals.css. */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/material-symbols-outlined.woff2") format("woff2");
+}
+
+:root {
+  --mz-surface: #0e1419;
+  --mz-surface-low: #161c22;
+  --mz-surface-high: #242b30;
+  --mz-surface-highest: #2f353b;
+  --mz-primary: #eac07d;
+  --mz-primary-container: #c9a162;
+  --mz-on-primary: #432c00;
+  --mz-secondary: #b1c9e0;
+  --mz-tertiary: #a9c9ef;
+  --mz-on-surface: #dde3ea;
+  --mz-outline: #8d9198;
+  --mz-outline-variant: #43474d;
+  --mz-error: #ffb4ab;
+  --mz-success: #8fd9a8;
+  --mz-warning: #f2c46d;
+  --mz-font-headline: "Space Grotesk", sans-serif;
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+  direction: ltr;
+  flex-shrink: 0;
+  -webkit-font-smoothing: antialiased;
+}
+.material-symbols-outlined.mz-filled {
+  font-variation-settings: "FILL" 1;
+}

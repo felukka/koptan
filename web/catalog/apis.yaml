@@ -19,6 +19,8 @@ spec:
   definition: |-
     Koptan currently exposes Kubernetes custom resources in the
     felukka.org/v1alpha1 API group, including:
-    - Service
-    - CI
-    - CD
+    - Voyage
+    - GoApp
+    - JavaApp
+    - DotnetApp
+    - Slipway

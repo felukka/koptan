@@ -3,6 +3,7 @@ import {
   SidebarDivider,
   SidebarGroup,
   SidebarItem,
+  SidebarScrollWrapper,
   SidebarSpace,
 } from '@backstage/core-components';
 import { NavContentBlueprint } from '@backstage/plugin-app-react';
@@ -12,22 +13,16 @@ import { UserSettingsSignInAvatar } from '@backstage/plugin-user-settings';
 import { identityApiRef, useApi } from '@backstage/frontend-plugin-api';
 import ExitToAppIcon from '@material-ui/icons/ExitToApp';
 import SearchIcon from '@material-ui/icons/Search';
-import BarChartIcon from '@material-ui/icons/BarChart';
-import StorageIcon from '@material-ui/icons/Storage';
-import NotificationsIcon from '@material-ui/icons/Notifications';
-import DnsIcon from '@material-ui/icons/Dns';
-import HeartMonitorIcon from '@material-ui/icons/FavoriteBorder';
+import MenuIcon from '@material-ui/icons/Menu';
 import { SidebarLogo } from './SidebarLogo';
 
-const PAGES = {
-  METRICS: ['page:metrics'],
-  SERVICES: ['page:service'],
-  SCANNING: ['page:scanning'],
-  ALERTING: ['page:alerting'],
-  INFRASTRUCTURE: ['page:infrastructure'],
-  MONITORING: ['page:monitoring'],
-  PLATFORM: ['page:home'],
-};
+/** Koptan's pages, in the order they appear in the sidebar. */
+const KOPTAN_PAGES = [
+  'page:koptan-bay',
+  'page:koptan-raseef',
+  'page:koptan-scan-bay',
+  'page:koptan-signal-mast',
+];
 
 export const SidebarContent = NavContentBlueprint.make({
   params: {
@@ -37,6 +32,7 @@ export const SidebarContent = NavContentBlueprint.make({
         <SidebarItem icon={() => item.icon} to={item.href} text={item.title} />
       ));
 
+      // Rendered by hand below
       nav.take('page:search');
       nav.take('page:notifications');
 
@@ -47,47 +43,23 @@ export const SidebarContent = NavContentBlueprint.make({
             <SidebarSearchModal />
           </SidebarGroup>
           <SidebarDivider />
-
-          <SidebarGroup label="Metrics" icon={<BarChartIcon />}>
-            {PAGES.METRICS.map((id) => nav.take(id))}
+          <SidebarGroup label="Koptan" icon={<MenuIcon />}>
+            {KOPTAN_PAGES.map((id) => nav.take(id))}
+            <SidebarDivider />
+            {nav.take('page:home')}
+            <SidebarScrollWrapper>
+              {nav.rest({ sortBy: 'title' })}
+            </SidebarScrollWrapper>
           </SidebarGroup>
-
-          <SidebarGroup label="Services" icon={<StorageIcon />}>
-            {PAGES.SERVICES.map((id) => nav.take(id))}
-          </SidebarGroup>
-
-          <SidebarGroup label="Scanning" icon={<StorageIcon />}>
-            {PAGES.SCANNING.map((id) => nav.take(id))}
-          </SidebarGroup>
-
-          <SidebarGroup label="Alerting" icon={<NotificationsIcon />}>
-            {PAGES.ALERTING.map((id) => nav.take(id))}
-          </SidebarGroup>
-
-          <SidebarGroup label="Infrastructure" icon={<DnsIcon />}>
-            {PAGES.INFRASTRUCTURE.map((id) => nav.take(id))}
-          </SidebarGroup>
-
-          <SidebarGroup label="Monitoring" icon={<HeartMonitorIcon />}>
-            {PAGES.MONITORING.map((id) => nav.take(id))}
-          </SidebarGroup>
-
           <SidebarSpace />
           <SidebarDivider />
-
-          {PAGES.PLATFORM.map((id) => nav.take(id))}
-
-          <SidebarDivider />
-
           <NotificationsSidebarItem />
           <SidebarDivider />
-
           <SidebarItem
             icon={ExitToAppIcon}
             text="Sign out"
             onClick={() => identityApi.signOut()}
           />
-
           <SidebarGroup
             label="Settings"
             icon={<UserSettingsSignInAvatar />}

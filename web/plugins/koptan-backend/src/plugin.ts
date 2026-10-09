@@ -2,7 +2,7 @@ import {
   coreServices,
   createBackendPlugin,
 } from '@backstage/backend-plugin-api';
-import { KubeKoptanClient } from './service/crdClient';
+import { KubeKoptanClient } from './service/k8s';
 import { koptanPermissions } from '@internal/plugin-koptan-common';
 import { createRouter } from './service/router';
 
