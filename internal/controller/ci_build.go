@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	koptanv1 "github.com/felukka/koptan/api/v1"
+	"github.com/felukka/koptan/internal/plugins"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +17,7 @@ const (
 	gitImage     = "alpine/git:2.47.2"
 	buildahImage = "quay.io/buildah/stable:v1.43.0"
 
-	workspacePath    = "/workspace"
+	workspacePath    = plugins.WorkspacePath
 	dockerfilePath   = "/koptan/dockerfile"
 	dockerConfigPath = "/koptan/auth"
 
@@ -65,11 +66,14 @@ func imageRef(ci *koptanv1.CI, sha string) string {
 	return fmt.Sprintf("%s/%s:%s", registry, repo, short(sha))
 }
 
-// buildPod clones the repository at sha, builds it with the Dockerfile from
-// the ConfigMap, and pushes image with the optional registry credentials.
-func buildPod(ci *koptanv1.CI, svc *koptanv1.Service, sha, image, dockerCfgSecret string) *corev1.Pod {
+// buildPod clones the repository at sha, runs the plugin steps, builds it
+// with the Dockerfile from the ConfigMap, and pushes image with the
+// optional registry credentials.
+func buildPod(ci *koptanv1.CI, svc *koptanv1.Service, sha, image, dockerCfgSecret string,
+	steps []corev1.Container) *corev1.Pod {
 	volumes := []corev1.Volume{
-		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: plugins.WorkspaceVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: plugins.ReportsVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		// Every key is mounted: Dockerfile and, when generated, .dockerignore.
 		{Name: "dockerfile", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
 			LocalObjectReference: corev1.LocalObjectReference{Name: ci.Spec.DockerfileConfigMap},
@@ -118,6 +122,7 @@ func buildPod(ci *koptanv1.CI, svc *koptanv1.Service, sha, image, dockerCfgSecre
 		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{Name: "workspace", MountPath: workspacePath})
 		initContainers = append(initContainers, *c)
 	}
+	initContainers = append(initContainers, steps...)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

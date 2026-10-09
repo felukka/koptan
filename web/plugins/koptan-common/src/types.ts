@@ -7,6 +7,7 @@ export const KOPTAN_PLURALS = {
   Service: 'services',
   CI: 'cis',
   CD: 'cds',
+  CIPlugin: 'ciplugins',
 } as const;
 
 export type ServicePhase =
@@ -79,6 +80,8 @@ export interface Service {
     replicas?: number;
     port?: number;
     build?: BuildSpec;
+    /** CIPlugins this Service runs, by name. */
+    plugins?: { name: string }[];
   };
   status?: {
     phase?: ServicePhase;
@@ -109,6 +112,8 @@ export interface CI {
     /** Commit SHA to build. */
     revision?: string;
     contextDir?: string;
+    /** Resolved plugins, in run order. */
+    plugins?: { name: string; generation?: number }[];
   };
   status?: {
     phase?: CIPhase;
@@ -118,9 +123,19 @@ export interface CI {
     lastBuildTime?: string;
     buildPod?: string;
     buildingRevision?: string;
+    pluginResults?: PluginResult[];
     message?: string;
     conditions?: Condition[];
   };
+}
+
+export type PluginPhase = 'Pending' | 'Running' | 'Succeeded' | 'Failed';
+
+/** One plugin step of a CI's latest build. */
+export interface PluginResult {
+  name: string;
+  phase: PluginPhase;
+  message?: string;
 }
 
 /** Deployment of a CI's image. */
@@ -182,6 +197,10 @@ export interface CreatePipelineRequest {
   };
   replicas?: number;
   port?: number;
+  /** CIPlugins to run after checkout, by name. */
+  plugins?: string[];
+  /** Build context inside the repository, for monorepos. */
+  contextDir?: string;
 }
 
 /** Cluster facts shown in the Bay metrics bar. */
@@ -200,4 +219,45 @@ export interface ActivityEntry {
   namespace?: string;
   message: string;
   severity: 'info' | 'success' | 'error';
+}
+
+export type CIPluginType = 'sonarqube' | 'codeql' | 'custom';
+
+/** A pluggable CI step (SonarQube, CodeQL, custom) run before build/push. */
+export interface CIPlugin {
+  metadata: ObjectMeta;
+  spec: {
+    type: CIPluginType;
+    order?: number;
+    failurePolicy?: 'Fail' | 'Ignore';
+    targetRefs?: { kind?: string; name: string }[];
+    selector?: { matchLabels?: Record<string, string> };
+    sonarqube?: { hostURL: string; projectKey?: string };
+    codeql?: {
+      languages?: string[];
+      querySuite?: string;
+      failOnSeverity?: string;
+    };
+    custom?: { image: string; command?: string[]; args?: string[] };
+  };
+  status?: {
+    attachedServices?: string[];
+    conditions?: Condition[];
+  };
+}
+
+/** The latest plugin results of one Service's CI. */
+export interface PluginRun {
+  service: string;
+  namespace?: string;
+  ci: string;
+  revision?: string;
+  phase?: CIPhase;
+  results: PluginResult[];
+}
+
+/** GET /plugins: every CIPlugin and the latest runs. */
+export interface ScanBay {
+  plugins: CIPlugin[];
+  runs: PluginRun[];
 }

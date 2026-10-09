@@ -27,7 +27,7 @@ const (
 // discoverAndBuild runs discovery at rev, stores the Dockerfile and points
 // the CI at rev. A non-zero result or error means the Service is not Ready.
 func (r *ServiceReconciler) discoverAndBuild(ctx context.Context, svc *koptanv1.Service,
-	rev *utils.Revision, token string) (ctrl.Result, error) {
+	rev *utils.Revision, token string, pluginRefs []koptanv1.CIPluginRef) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	setPhase(svc, koptanv1.ServicePhaseDiscovering,
 		fmt.Sprintf("Discovering %s at %s", svc.Spec.Source.Repo, short(rev.SHA)))
@@ -49,7 +49,9 @@ func (r *ServiceReconciler) discoverAndBuild(ctx context.Context, svc *koptanv1.
 		return ctrl.Result{}, err
 	}
 
-	ciName, err := r.ensureCI(ctx, svc, result.Language(), rev.SHA, cmName)
+	ciName, err := r.ensureCI(ctx, svc, ciTarget{
+		language: result.Language(), sha: rev.SHA, dockerfileCM: cmName, plugins: pluginRefs,
+	})
 	if err != nil {
 		if apierrors.IsConflict(err) || apierrors.IsAlreadyExists(err) {
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
@@ -152,10 +154,17 @@ func (r *ServiceReconciler) ensureDockerfile(ctx context.Context, svc *koptanv1.
 	return cm.Name, nil
 }
 
+// ciTarget is what the CI should build.
+type ciTarget struct {
+	language     string
+	sha          string
+	dockerfileCM string
+	plugins      []koptanv1.CIPluginRef
+}
+
 // ensureCI creates or updates the CI that builds this Service. An existing
 // CI for the Service (e.g. one applied by hand) is reused.
-func (r *ServiceReconciler) ensureCI(ctx context.Context, svc *koptanv1.Service,
-	language, sha, dockerfileCM string) (string, error) {
+func (r *ServiceReconciler) ensureCI(ctx context.Context, svc *koptanv1.Service, target ciTarget) (string, error) {
 	name := svc.Name + "-ci"
 	var ciList koptanv1.CIList
 	if err := r.List(ctx, &ciList, client.InNamespace(svc.Namespace)); err != nil {
@@ -178,10 +187,11 @@ func (r *ServiceReconciler) ensureCI(ctx context.Context, svc *koptanv1.Service,
 			ci.Labels = map[string]string{}
 		}
 		ci.Labels[labelService] = svc.Name
-		ci.Labels[labelLanguage] = language
+		ci.Labels[labelLanguage] = target.language
 		ci.Spec.Service.Name = svc.Name
-		ci.Spec.Revision = sha
-		ci.Spec.DockerfileConfigMap = dockerfileCM
+		ci.Spec.Revision = target.sha
+		ci.Spec.DockerfileConfigMap = target.dockerfileCM
+		ci.Spec.Plugins = target.plugins
 		ci.Spec.ContextDir = ""
 		if svc.Spec.Build != nil {
 			ci.Spec.ContextDir = svc.Spec.Build.ContextDir

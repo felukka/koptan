@@ -16,6 +16,10 @@ spec:
     credentialsSecret: "example-registry"
   replicas: 2
   port: 8080
+  # CIPlugins that run after checkout and before build/push (see the
+  # koptan_v1_ciplugin_*.yaml samples). Plugins can also attach themselves.
+  plugins:
+    - name: trivy-fs
   # Optional. Without a Dockerfile in the repository, one is generated for
   # the detected stack (go, rust, java, dotnet, python, ruby, php, node, static).
   build:

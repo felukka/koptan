@@ -54,6 +54,7 @@ type ServiceReconciler struct {
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=services/finalizers,verbs=update
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cds,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=ciplugins,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
@@ -111,40 +112,27 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{RequeueAfter: failedRetryInterval}, r.patchStatus(ctx, orig, &svc)
 	}
 
-	needsDiscovery := specChanged || svc.Status.Phase != koptanv1.ServicePhaseReady
+	pluginRefs, err := r.resolvePlugins(ctx, &svc)
+	if err != nil {
+		r.markFailed(&svc, "PluginUnavailable", err.Error())
+		return ctrl.Result{RequeueAfter: failedRetryInterval}, r.patchStatus(ctx, orig, &svc)
+	}
+
 	var rev *utils.Revision
-	if needsDiscovery {
+	if specChanged || svc.Status.Phase != koptanv1.ServicePhaseReady {
 		rev, err = utils.ResolveRevision(ctx, svc.Spec.Source.Repo, svc.Spec.Source.Revision, token)
 		if err != nil {
 			r.markFailed(&svc, "RevisionUnresolved", fmt.Sprintf("resolve revision: %v", err))
 			return ctrl.Result{RequeueAfter: failedRetryInterval}, r.patchStatus(ctx, orig, &svc)
 		}
-	} else {
-		// --- Polling phase: check for new git commits ---
-		changed, newRev, err := utils.HasRevisionChanged(ctx, svc.Spec.Source.Repo,
-			svc.Spec.Source.Revision, svc.Status.LatestRevision, token)
-		if err != nil {
-			log.Error(err, "failed to check for new commits, will retry")
-			svc.Status.Message = fmt.Sprintf("Could not check for new commits: %v", err)
-			return ctrl.Result{RequeueAfter: pushPollInterval}, r.patchStatus(ctx, orig, &svc)
-		}
-		if changed {
-			log.Info("new commit detected, re-triggering pipeline",
-				"previousRevision", svc.Status.LatestRevision, "newRevision", newRev.SHA)
-			now := metav1.Now()
-			svc.Status.LastPushDetected = &now
-			meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
-				Type:    "CommitDetected",
-				Status:  metav1.ConditionTrue,
-				Reason:  "NewCommit",
-				Message: fmt.Sprintf("New commit %s detected on %s", short(newRev.SHA), svc.Spec.Source.Repo),
-			})
-			rev = newRev
-		}
+	} else if rev, err = r.pollForCommit(ctx, &svc, token); err != nil {
+		log.Error(err, "failed to check for new commits, will retry")
+		svc.Status.Message = fmt.Sprintf("Could not check for new commits: %v", err)
+		return ctrl.Result{RequeueAfter: pushPollInterval}, r.patchStatus(ctx, orig, &svc)
 	}
 
 	if rev != nil {
-		if res, err := r.discoverAndBuild(ctx, &svc, rev, token); err != nil || !res.IsZero() {
+		if res, err := r.discoverAndBuild(ctx, &svc, rev, token, pluginRefs); err != nil || !res.IsZero() {
 			if perr := r.patchStatus(ctx, orig, &svc); perr != nil {
 				return ctrl.Result{}, perr
 			}
@@ -152,6 +140,9 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
+	if err := r.syncPlugins(ctx, &svc, pluginRefs); err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.syncCD(ctx, &svc); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -159,6 +150,27 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: pushPollInterval}, nil
+}
+
+// pollForCommit returns the new revision when the tracked branch or tag
+// moved since the last build, or nil when it did not.
+func (r *ServiceReconciler) pollForCommit(ctx context.Context, svc *koptanv1.Service, token string) (*utils.Revision, error) {
+	changed, rev, err := utils.HasRevisionChanged(ctx, svc.Spec.Source.Repo,
+		svc.Spec.Source.Revision, svc.Status.LatestRevision, token)
+	if err != nil || !changed {
+		return nil, err
+	}
+	logf.FromContext(ctx).Info("new commit detected, re-triggering pipeline",
+		"previousRevision", svc.Status.LatestRevision, "newRevision", rev.SHA)
+	now := metav1.Now()
+	svc.Status.LastPushDetected = &now
+	meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
+		Type:    "CommitDetected",
+		Status:  metav1.ConditionTrue,
+		Reason:  "NewCommit",
+		Message: fmt.Sprintf("New commit %s detected on %s", short(rev.SHA), svc.Spec.Source.Repo),
+	})
+	return rev, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -175,6 +187,7 @@ func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return []ctrl.Request{{NamespacedName: types.NamespacedName{
 					Namespace: o.GetNamespace(), Name: name}}}
 			})).
+		Watches(&koptanv1.CIPlugin{}, handler.EnqueueRequestsFromMapFunc(r.servicesForPlugin)).
 		Named("service").
 		Complete(r)
 }

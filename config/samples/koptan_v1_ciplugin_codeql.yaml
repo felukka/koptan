@@ -1,0 +1,23 @@
+# CodeQL code scanning. Without `languages` it analyzes the language Koptan
+# detected (go, node, python, java, dotnet, ruby). The build fails when a
+# result at or above failOnSeverity is found.
+apiVersion: koptan.felukka.org/v1
+kind: CIPlugin
+metadata:
+  name: codeql
+  namespace: default
+spec:
+  type: codeql
+  order: 30
+  codeql:
+    querySuite: security-extended
+    failOnSeverity: error
+    # languages: ["javascript-typescript"]
+    # Upload the SARIF to GitHub code scanning:
+    # github:
+    #   repository: example/repo
+    #   ref: refs/heads/main
+    #   tokenSecretRef: {name: github-security-events, key: token}
+  targetRefs:
+    - kind: Service
+      name: example-service

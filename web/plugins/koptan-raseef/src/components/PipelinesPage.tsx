@@ -114,6 +114,15 @@ const CICard = ({ ci }: { ci?: Pipeline['ci'] }) => (
         </Field>
         <Field label="Last Image">{ci.status?.latestImage ?? '—'}</Field>
         <Field label="Builds">{ci.status?.buildCount ?? 0}</Field>
+        {!!ci.status?.pluginResults?.length && (
+          <Field label="Plugin steps">
+            {ci.status.pluginResults.map((r) => (
+              <div key={r.name} title={r.message}>
+                <Phase phase={r.phase} /> {r.name}
+              </div>
+            ))}
+          </Field>
+        )}
         {progress(ci.status?.phase) !== undefined && (
           <div className="mz-bar">
             <div style={{ width: `${progress(ci.status?.phase)}%` }} />

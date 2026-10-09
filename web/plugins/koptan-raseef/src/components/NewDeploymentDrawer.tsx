@@ -1,76 +1,12 @@
 import type { CreatePipelineRequest } from '@internal/plugin-koptan-common';
-import { Icon, useKoptanApi } from '@internal/plugin-koptan-react';
+import {
+  EnvEditor,
+  FormField as Field,
+  Icon,
+  useKoptanApi,
+} from '@internal/plugin-koptan-react';
 import { type FormEvent, useState } from 'react';
-
-const Field = ({
-  label,
-  children,
-  group,
-}: {
-  label: string;
-  children: React.ReactNode;
-  /** Use for editors with several controls, where a <label> would mislead. */
-  group?: boolean;
-}) =>
-  group ? (
-    <div className="mz-form-field">
-      <div className="mz-field-label">{label}</div>
-      {children}
-    </div>
-  ) : (
-    // biome-ignore lint/a11y/noLabelWithoutControl: the control is passed as children
-    <label className="mz-form-field">
-      <span className="mz-field-label">{label}</span>
-      {children}
-    </label>
-  );
-
-const EnvEditor = ({
-  rows,
-  onChange,
-}: {
-  rows: [string, string][];
-  onChange: (v: [string, string][]) => void;
-}) => (
-  <div className="mz-list-edit">
-    {rows.map(([k, v], i) => (
-      // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional
-      <div className="mz-list-row" key={i}>
-        <input
-          className="mz-input"
-          value={k}
-          placeholder="KEY"
-          onChange={(e) =>
-            onChange(rows.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))
-          }
-        />
-        <input
-          className="mz-input"
-          value={v}
-          placeholder="VALUE"
-          onChange={(e) =>
-            onChange(rows.map((r, j) => (j === i ? [r[0], e.target.value] : r)))
-          }
-        />
-        <button
-          type="button"
-          className="mz-btn"
-          aria-label="Remove"
-          onClick={() => onChange(rows.filter((_, j) => j !== i))}
-        >
-          <Icon name="close" size={16} />
-        </button>
-      </div>
-    ))}
-    <button
-      type="button"
-      className="mz-btn"
-      onClick={() => onChange([...rows, ['', '']])}
-    >
-      <Icon name="add" size={16} /> Add variable
-    </button>
-  </div>
-);
+import { PluginPicker } from './PluginPicker';
 
 /** Slide-in form that creates a Service; the operator derives its CI and CD. */
 export const NewDeploymentDrawer = ({
@@ -93,6 +29,8 @@ export const NewDeploymentDrawer = ({
   const [password, setPassword] = useState('');
   const [replicas, setReplicas] = useState('1');
   const [port, setPort] = useState('8080');
+  const [contextDir, setContextDir] = useState('');
+  const [plugins, setPlugins] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -123,6 +61,8 @@ export const NewDeploymentDrawer = ({
       ...(Object.keys(image).length ? { image } : {}),
       replicas: Number(replicas),
       port: Number(port),
+      ...(contextDir.trim() ? { contextDir: contextDir.trim() } : {}),
+      ...(plugins.length ? { plugins } : {}),
     };
     try {
       await createPipeline(req);
@@ -220,6 +160,15 @@ export const NewDeploymentDrawer = ({
                 />
               </Field>
             </div>
+            <Field label="Build context (monorepos)">
+              <input
+                className="mz-input"
+                aria-label="Build context"
+                value={contextDir}
+                onChange={(e) => setContextDir(e.target.value)}
+                placeholder="repository root, or e.g. services/api"
+              />
+            </Field>
             <Field label="Environment variables" group>
               <EnvEditor rows={env} onChange={setEnv} />
             </Field>
@@ -297,6 +246,19 @@ export const NewDeploymentDrawer = ({
                 />
               </Field>
             </div>
+          </div>
+
+          <div className="mz-form-section">
+            <h2>
+              <Icon name="radar" /> CI plugins
+            </h2>
+            <Field label="Run after checkout, before build" group>
+              <PluginPicker
+                namespace={namespace.trim() || 'default'}
+                value={plugins}
+                onChange={setPlugins}
+              />
+            </Field>
           </div>
 
           <div className="mz-form-actions">

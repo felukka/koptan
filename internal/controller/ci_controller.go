@@ -43,6 +43,7 @@ func NewCIReconciler(c client.Client, s *runtime.Scheme) *CIReconciler {
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis/finalizers,verbs=update
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=services,verbs=get;list;watch
+// +kubebuilder:rbac:groups=koptan.felukka.org,resources=ciplugins,verbs=get;list;watch
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cds,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
@@ -104,6 +105,7 @@ func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			return ctrl.Result{}, err
 		}
 		phase, msg, done := podResult(&pod)
+		ci.Status.PluginResults = pluginResults(&ci, &pod)
 		if !done {
 			setCIPhase(&ci, koptanv1.CIPhaseBuilding, msg)
 			return ctrl.Result{RequeueAfter: buildPollInterval}, r.patchStatus(ctx, orig, &ci)
@@ -151,10 +153,17 @@ func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		ci.Status.ObservedGeneration = ci.Generation
 		return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
 	}
+	steps, err := r.pluginSteps(ctx, &ci, svc, sha)
+	if err != nil {
+		r.markCIFailed(&ci, "PluginUnavailable", err.Error())
+		ci.Status.BuildingRevision = sha
+		ci.Status.ObservedGeneration = ci.Generation
+		return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
+	}
 	if err := r.deleteBuildPods(ctx, &ci); err != nil {
 		return ctrl.Result{}, err
 	}
-	pod := buildPod(&ci, svc, sha, image, dockerCfg)
+	pod := buildPod(&ci, svc, sha, image, dockerCfg, steps)
 	if err := controllerutil.SetControllerReference(&ci, pod, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -163,6 +172,7 @@ func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	}
 	log.Info("starting build", "service", svc.Name, "image", image, "pod", pod.Name)
 	ci.Status.BuildPod = pod.Name
+	ci.Status.PluginResults = pendingPluginResults(&ci)
 	ci.Status.BuildingRevision = sha
 	ci.Status.ObservedGeneration = ci.Generation
 	setCIPhase(&ci, koptanv1.CIPhaseBuilding, fmt.Sprintf("Building %s in pod %s", image, pod.Name))

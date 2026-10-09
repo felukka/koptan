@@ -116,6 +116,16 @@
   display: flex;
   gap: 8px;
 }
+.mz-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mz-check input {
+  accent-color: var(--mz-primary);
+}
 
 /* ---- sample pages ---- */
 .mz-bento {

@@ -1619,6 +1619,25 @@ spec:
                 - registry
                 - repo
                 type: object
+              plugins:
+                description: |-
+                  Plugins run, in order, after checkout and before build/push. The
+                  Service controller resolves them; the generation makes a plugin
+                  change rebuild.
+                items:
+                  description: CIPluginRef pins a CIPlugin at the generation the build
+                    should use.
+                  properties:
+                    generation:
+                      format: int64
+                      type: integer
+                    name:
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               revision:
                 description: Revision is the commit SHA to build; the Service controller
                   sets it.
@@ -1725,6 +1744,26 @@ spec:
                 type: integer
               phase:
                 type: string
+              pluginResults:
+                description: PluginResults are the plugin steps of the latest build,
+                  in order.
+                items:
+                  description: PluginResult is the outcome of one plugin step in the
+                    latest build.
+                  properties:
+                    message:
+                      type: string
+                    name:
+                      type: string
+                    phase:
+                      description: PluginPhase is the state of one plugin step in
+                        the latest build.
+                      type: string
+                  required:
+                  - name
+                  - phase
+                  type: object
+                type: array
             type: object
         required:
         - metadata

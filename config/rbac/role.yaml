@@ -76,9 +76,18 @@ rules:
   - koptan.felukka.org
   resources:
   - cds/status
+  - ciplugins/status
   - cis/status
   - services/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - koptan.felukka.org
+  resources:
+  - ciplugins
+  verbs:
+  - get
+  - list
+  - watch

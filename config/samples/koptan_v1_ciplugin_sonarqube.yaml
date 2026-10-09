@@ -1,0 +1,26 @@
+# SonarQube analysis after checkout and before build/push. A Service runs it
+# when it lists `plugins: [{name: sonarqube}]`, or when this plugin targets
+# the Service (targetRefs) or selects it by label (selector).
+apiVersion: koptan.felukka.org/v1
+kind: CIPlugin
+metadata:
+  name: sonarqube
+  namespace: default
+spec:
+  type: sonarqube
+  order: 20
+  failurePolicy: Fail
+  sonarqube:
+    hostURL: "https://sonarqube.example.com"
+    # kubectl create secret generic sonarqube-token --from-literal=token=...
+    tokenSecretRef:
+      name: sonarqube-token
+      key: token
+    # Defaults to <namespace>_<service>.
+    # projectKey: "team_api"
+    waitForQualityGate: true
+    extraArgs:
+      - "-Dsonar.exclusions=**/*_test.go,**/vendor/**"
+  selector:
+    matchLabels:
+      koptan.felukka.org/quality: "sonar"

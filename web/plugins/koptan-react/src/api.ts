@@ -5,6 +5,7 @@ import type {
   CreatePipelineRequest,
   Overview,
   Pipeline,
+  ScanBay,
 } from '@internal/plugin-koptan-common';
 import { useCallback } from 'react';
 
@@ -41,6 +42,10 @@ export function useKoptanApi() {
     async () => json<ClusterInfo>(await fetch('plugin://koptan/cluster')),
     [fetch],
   );
+  const getScanBay = useCallback(
+    async () => json<ScanBay>(await fetch('plugin://koptan/plugins')),
+    [fetch],
+  );
   const createPipeline = useCallback(
     async (req: CreatePipelineRequest) =>
       json<Pipeline>(
@@ -52,5 +57,12 @@ export function useKoptanApi() {
       ),
     [fetch],
   );
-  return { getOverview, getPipelines, getActivity, getCluster, createPipeline };
+  return {
+    getOverview,
+    getPipelines,
+    getActivity,
+    getCluster,
+    getScanBay,
+    createPipeline,
+  };
 }

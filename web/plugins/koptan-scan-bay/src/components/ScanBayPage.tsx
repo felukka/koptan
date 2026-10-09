@@ -1,78 +1,73 @@
-import { Badge, KoptanPage, SampleNote } from '@internal/plugin-koptan-react';
+import { Progress } from '@backstage/core-components';
+import {
+  Icon,
+  KoptanPage,
+  Section,
+  useKoptanApi,
+} from '@internal/plugin-koptan-react';
+import useAsyncRetry from 'react-use/esm/useAsyncRetry';
+import { PluginsTable } from './PluginsTable';
+import { RunsTable } from './RunsTable';
 
-const ROWS = [
-  {
-    resource: 'payment-cd',
-    kind: 'CD',
-    findings: [
-      ['1 CRITICAL', 'error'],
-      ['3 MEDIUM', 'warning'],
-    ] as const,
-    status: 'At Risk',
-  },
-  {
-    resource: 'auth-cd',
-    kind: 'CD',
-    findings: [['NONE', 'success']] as const,
-    status: 'Secure',
-  },
-];
+/** CIPlugins (SonarQube, CodeQL, custom scans) and their latest results. */
+export const ScanBayPage = () => {
+  const { getScanBay } = useKoptanApi();
+  const { value, loading, error, retry } = useAsyncRetry(getScanBay, [
+    getScanBay,
+  ]);
+  const failing =
+    value?.runs.filter((r) => r.results.some((s) => s.phase === 'Failed'))
+      .length ?? 0;
 
-export const ScanBayPage = () => (
-  <KoptanPage
-    title="The Scan Bay"
-    description={
-      <>
-        Security posture analysis. Hull integrity:{' '}
-        <span className="mz-accent">98%</span>
-      </>
-    }
-  >
-    <SampleNote>
-      Vulnerability scanning is not wired up yet; the operator has no scan data
-      source. The rows below only show the planned layout.
-    </SampleNote>
-    <section className="mz-panel">
-      <table className="mz-table">
-        <thead>
-          <tr>
-            <th>Resource</th>
-            <th>Kind</th>
-            <th>Vulnerabilities</th>
-            <th>Status</th>
-            <th className="mz-right">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ROWS.map((r) => (
-            <tr key={r.resource}>
-              <td style={{ fontWeight: 700 }}>{r.resource}</td>
-              <td className="mz-muted">{r.kind}</td>
-              <td>
-                {r.findings.map(([label, variant]) => (
-                  <span key={label} style={{ marginRight: 8 }}>
-                    <Badge variant={variant}>{label}</Badge>
-                  </span>
-                ))}
-              </td>
-              <td
-                className={
-                  r.status === 'At Risk'
-                    ? 'mz-status mz-status--bad'
-                    : 'mz-status mz-status--ok'
-                }
-              >
-                {r.status}
-              </td>
-              <td className="mz-right">
-                <button type="button" className="mz-link-btn" disabled>
-                  View Report
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  </KoptanPage>
-);
+  return (
+    <KoptanPage
+      title="The Scan Bay"
+      description={
+        <>
+          Checks that run after checkout and before every build.{' '}
+          {value && (
+            <span className={failing ? 'mz-error-text' : 'mz-accent'}>
+              {failing
+                ? `${failing} service(s) failing a check`
+                : 'All checks passing'}
+            </span>
+          )}
+        </>
+      }
+      actions={
+        <button type="button" className="mz-btn" onClick={retry}>
+          <Icon name="refresh" size={16} /> Refresh
+        </button>
+      }
+    >
+      {loading && <Progress />}
+      {error && (
+        <div className="mz-alert">
+          <strong>Could not load plugins.</strong> {error.message}
+        </div>
+      )}
+      {value && (
+        <>
+          <Section icon={<Icon name="extension" />} title="Plugins">
+            {value.plugins.length ? (
+              <PluginsTable plugins={value.plugins} />
+            ) : (
+              <span className="mz-muted">
+                No CIPlugins yet. Apply one (see
+                config/samples/koptan_v1_ciplugin_*.yaml) and list it in a
+                Service's spec.plugins, or let it target Services itself.
+              </span>
+            )}
+          </Section>
+          <Section icon={<Icon name="radar" />} title="Latest results">
+            {value.runs.length ? (
+              <RunsTable runs={value.runs} />
+            ) : (
+              <span className="mz-muted">No build has run a plugin yet.</span>
+            )}
+          </Section>
+        </>
+      )}
+    </KoptanPage>
+  );
+};

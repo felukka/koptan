@@ -73,6 +73,14 @@ type BuildSpec struct {
 	Language string `json:"language,omitempty"`
 }
 
+// PluginRef names a CIPlugin in the Service's namespace.
+type PluginRef struct {
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +required
+	Name string `json:"name"`
+}
+
 // DetectedStack is what discovery learned about the repository.
 type DetectedStack struct {
 	Language string `json:"language,omitempty"`
@@ -102,6 +110,15 @@ type ServiceSpec struct {
 
 	// +optional
 	Build *BuildSpec `json:"build,omitempty"`
+
+	// Plugins are CIPlugins (in this namespace) that run after checkout and
+	// before build/push. Plugins can also attach themselves to this Service
+	// through their targetRefs or selector.
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	Plugins []PluginRef `json:"plugins,omitempty"`
 
 	// Port the application listens on; also exported as $PORT.
 	// +kubebuilder:validation:Minimum=1

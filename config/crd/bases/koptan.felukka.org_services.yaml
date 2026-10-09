@@ -270,6 +270,26 @@ spec:
                       Service name.
                     type: string
                 type: object
+              plugins:
+                description: |-
+                  Plugins are CIPlugins (in this namespace) that run after checkout and
+                  before build/push. Plugins can also attach themselves to this Service
+                  through their targetRefs or selector.
+                items:
+                  description: PluginRef names a CIPlugin in the Service's namespace.
+                  properties:
+                    name:
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  type: object
+                maxItems: 32
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               port:
                 description: Port the application listens on; also exported as $PORT.
                 format: int32

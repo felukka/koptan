@@ -11,9 +11,11 @@ export {
 export {
   DNS_LABEL,
   isValidRepoUrl,
+  validateContextDir,
   validateCreate,
   validateImage,
   validateName,
+  validatePlugins,
   validateRevision,
   validateRuntime,
 } from './validate';

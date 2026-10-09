@@ -3,6 +3,7 @@
 # It lists every Koptan resource and can create a Service from the UI, store the
 # git token and registry credentials as Secrets (owned by the Service, deleted
 # again if the Service cannot be created), and read node status for the Bay.
+# CIPlugins are listed for the Scan Bay.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -22,6 +23,14 @@ rules:
       - list
       - watch
       - create
+  - apiGroups:
+      - koptan.felukka.org
+    resources:
+      - ciplugins
+    verbs:
+      - get
+      - list
+      - watch
   - apiGroups:
       - ""
     resources:

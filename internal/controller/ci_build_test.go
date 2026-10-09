@@ -33,7 +33,7 @@ func testService() *koptanv1.Service {
 
 func TestBuildPodUsesContextDirAndWholeConfigMap(t *testing.T) {
 	ci := testCI()
-	pod := buildPod(ci, testService(), ci.Spec.Revision, "ttl.sh/team/web:0123456789ab", "")
+	pod := buildPod(ci, testService(), ci.Spec.Revision, "ttl.sh/team/web:0123456789ab", "", nil)
 
 	build := pod.Spec.Containers[0]
 	if !hasEnv(build.Env, "CONTEXT_DIR", "services/web") {

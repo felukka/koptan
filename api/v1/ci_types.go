@@ -79,8 +79,41 @@ type CISpec struct {
 	// +optional
 	ContextDir string `json:"contextDir,omitempty"`
 
+	// Plugins run, in order, after checkout and before build/push. The
+	// Service controller resolves them; the generation makes a plugin
+	// change rebuild.
+	// +optional
+	Plugins []CIPluginRef `json:"plugins,omitempty"`
+
 	// +optional
 	ExtraSteps []corev1.Container `json:"extraSteps,omitempty"`
+}
+
+// CIPluginRef pins a CIPlugin at the generation the build should use.
+type CIPluginRef struct {
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
+	// +optional
+	Generation int64 `json:"generation,omitempty"`
+}
+
+// PluginPhase is the state of one plugin step in the latest build.
+type PluginPhase string
+
+const (
+	PluginPhasePending   PluginPhase = "Pending"
+	PluginPhaseRunning   PluginPhase = "Running"
+	PluginPhaseSucceeded PluginPhase = "Succeeded"
+	PluginPhaseFailed    PluginPhase = "Failed"
+)
+
+// PluginResult is the outcome of one plugin step in the latest build.
+type PluginResult struct {
+	Name  string      `json:"name"`
+	Phase PluginPhase `json:"phase"`
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 // CIStatus defines the observed state of a CI build.
@@ -97,6 +130,10 @@ type CIStatus struct {
 	// BuildingRevision is the revision of the build in BuildPod.
 	// +optional
 	BuildingRevision string `json:"buildingRevision,omitempty"`
+	// PluginResults are the plugin steps of the latest build, in order.
+	// +optional
+	PluginResults []PluginResult `json:"pluginResults,omitempty"`
+
 	// ObservedGeneration is the spec generation of the latest build.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

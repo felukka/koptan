@@ -96,6 +96,30 @@ export function validateCreate(req: CreatePipelineRequest): string | undefined {
   return (
     validateRevision(req.revision) ??
     validateRuntime(req) ??
-    validateImage(req.image)
+    validateImage(req.image) ??
+    validatePlugins(req.plugins) ??
+    validateContextDir(req.contextDir)
   );
+}
+
+const REL_PATH = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/;
+
+/** A path inside the repository; mirrors ValidateRelPath in the operator. */
+export function validateContextDir(dir?: string): string | undefined {
+  if (!dir) return undefined;
+  if (
+    dir.length > 250 ||
+    !REL_PATH.test(dir) ||
+    dir.split('/').some((s) => s === '.' || s === '..')
+  )
+    return 'contextDir must be a relative path inside the repository';
+  return undefined;
+}
+
+export function validatePlugins(plugins?: string[]): string | undefined {
+  if ((plugins?.length ?? 0) > 32) return 'at most 32 plugins';
+  for (const p of plugins ?? []) {
+    if (!DNS_LABEL.test(p)) return `plugin "${p}" is not a valid name`;
+  }
+  return undefined;
 }
