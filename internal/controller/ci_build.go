@@ -45,8 +45,12 @@ git -c advice.detachedHead=false checkout -q --detach "$SHA"
 `
 
 const buildScript = `set -eu
+context="$WORKSPACE/${CONTEXT_DIR:-.}"
+if [ -f "$DOCKERFILE_DIR/.dockerignore" ] && [ ! -e "$context/.dockerignore" ]; then
+  cp "$DOCKERFILE_DIR/.dockerignore" "$context/.dockerignore"
+fi
 buildah --storage-driver vfs build --isolation chroot \
-  -f "$DOCKERFILE_DIR/Dockerfile" -t "$IMAGE" "$WORKSPACE"
+  -f "$DOCKERFILE_DIR/Dockerfile" -t "$IMAGE" "$context"
 if [ -f "$AUTH_DIR/config.json" ]; then
   buildah --storage-driver vfs push --authfile "$AUTH_DIR/config.json" "$IMAGE"
 else
@@ -66,9 +70,9 @@ func imageRef(ci *koptanv1.CI, sha string) string {
 func buildPod(ci *koptanv1.CI, svc *koptanv1.Service, sha, image, dockerCfgSecret string) *corev1.Pod {
 	volumes := []corev1.Volume{
 		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		// Every key is mounted: Dockerfile and, when generated, .dockerignore.
 		{Name: "dockerfile", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
 			LocalObjectReference: corev1.LocalObjectReference{Name: ci.Spec.DockerfileConfigMap},
-			Items:                []corev1.KeyToPath{{Key: dockerfileKey, Path: "Dockerfile"}},
 		}}},
 	}
 	buildMounts := []corev1.VolumeMount{
@@ -136,6 +140,7 @@ func buildPod(ci *koptanv1.CI, svc *koptanv1.Service, sha, image, dockerCfgSecre
 					{Name: "IMAGE", Value: image},
 					{Name: "WORKSPACE", Value: workspacePath},
 					{Name: "DOCKERFILE_DIR", Value: dockerfilePath},
+					{Name: "CONTEXT_DIR", Value: ci.Spec.ContextDir},
 					{Name: "AUTH_DIR", Value: dockerConfigPath},
 				},
 				VolumeMounts:             buildMounts,

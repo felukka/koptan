@@ -50,6 +50,42 @@ type ImageSpec struct {
 	CredentialsSecret string `json:"credentialsSecret,omitempty"`
 }
 
+// BuildSpec tunes how the image is built.
+type BuildSpec struct {
+	// ContextDir is the build context, relative to the repository root
+	// (for a service inside a monorepo). Empty means the root.
+	// +kubebuilder:validation:MaxLength=250
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`
+	// +optional
+	ContextDir string `json:"contextDir,omitempty"`
+
+	// DockerfilePath is the repository's Dockerfile, relative to the
+	// repository root. Empty means Dockerfile, Containerfile, docker/Dockerfile
+	// or build/Dockerfile in the context, else a generated one.
+	// +kubebuilder:validation:MaxLength=250
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`
+	// +optional
+	DockerfilePath string `json:"dockerfilePath,omitempty"`
+
+	// Language skips detection and generates the Dockerfile for this stack.
+	// +kubebuilder:validation:Enum=go;rust;java;dotnet;python;ruby;php;node;static
+	// +optional
+	Language string `json:"language,omitempty"`
+}
+
+// DetectedStack is what discovery learned about the repository.
+type DetectedStack struct {
+	Language string `json:"language,omitempty"`
+	// +optional
+	Version string `json:"version,omitempty"`
+	// +optional
+	PackageManager string `json:"packageManager,omitempty"`
+	// +optional
+	Framework string `json:"framework,omitempty"`
+	// +optional
+	Entrypoint string `json:"entrypoint,omitempty"`
+}
+
 type ServiceSpec struct {
 	// +required
 	Source Source `json:"source"`
@@ -64,6 +100,9 @@ type ServiceSpec struct {
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty"`
 
+	// +optional
+	Build *BuildSpec `json:"build,omitempty"`
+
 	// Port the application listens on; also exported as $PORT.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
@@ -75,7 +114,8 @@ type ServiceStatus struct {
 	// +optional
 	Phase ServicePhase `json:"phase,omitempty"`
 
-	// DiscoveredLanguage reveals what the AI decided if spec.language was empty
+	// ServiceType is the detected language, or "dockerfile" when only the
+	// repository's own Dockerfile was found.
 	// +optional
 	ServiceType string `json:"serviceType,omitempty"`
 
@@ -98,6 +138,16 @@ type ServiceStatus struct {
 	// DockerfileConfigMap holds the Dockerfile CI builds with.
 	// +optional
 	DockerfileConfigMap string `json:"dockerfileConfigMap,omitempty"`
+
+	// DockerfileSource says where the Dockerfile came from: the repository
+	// or a template generated from the detected stack.
+	// +kubebuilder:validation:Enum=repo;template
+	// +optional
+	DockerfileSource string `json:"dockerfileSource,omitempty"`
+
+	// Detected describes the stack discovery found.
+	// +optional
+	Detected *DetectedStack `json:"detected,omitempty"`
 
 	// ObservedGeneration is the spec generation the last discovery used.
 	// +optional

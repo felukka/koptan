@@ -60,3 +60,22 @@ func IsSHA(rev string) bool { return shaRe.MatchString(rev) }
 func IsHTTPURL(repo string) bool {
 	return strings.HasPrefix(repo, "https://") || strings.HasPrefix(repo, "http://")
 }
+
+var relPathRe = regexp.MustCompile(`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
+
+// ValidateRelPath accepts an empty path or a relative path inside the
+// repository: no leading slash, no "." or ".." segments.
+func ValidateRelPath(field, p string) error {
+	if p == "" {
+		return nil
+	}
+	if len(p) > 250 || !relPathRe.MatchString(p) {
+		return fmt.Errorf("%s %q is not a relative path", field, p)
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "." || seg == ".." {
+			return fmt.Errorf("%s %q must not contain . or .. segments", field, p)
+		}
+	}
+	return nil
+}

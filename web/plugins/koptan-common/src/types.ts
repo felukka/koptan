@@ -50,6 +50,25 @@ export interface EnvVar {
   value?: string;
 }
 
+/** How the image is built (Service spec.build). */
+export interface BuildSpec {
+  /** Build context relative to the repository root (monorepos). */
+  contextDir?: string;
+  /** The repository's Dockerfile, relative to the root. */
+  dockerfilePath?: string;
+  /** Skips detection and generates the Dockerfile for this stack. */
+  language?: string;
+}
+
+/** What discovery learned about the repository. */
+export interface DetectedStack {
+  language?: string;
+  version?: string;
+  packageManager?: string;
+  framework?: string;
+  entrypoint?: string;
+}
+
 /** What the user declares: a git repo. The operator derives CI and CD. */
 export interface Service {
   metadata: ObjectMeta;
@@ -59,11 +78,15 @@ export interface Service {
     image?: { registry?: string; repo?: string; credentialsSecret?: string };
     replicas?: number;
     port?: number;
+    build?: BuildSpec;
   };
   status?: {
     phase?: ServicePhase;
-    /** Detected language: go, java or dotnet. */
+    /** Detected language, or "dockerfile" for a repository Dockerfile only. */
     serviceType?: string;
+    /** Where the Dockerfile came from. */
+    dockerfileSource?: 'repo' | 'template';
+    detected?: DetectedStack;
     latestRevision?: string;
     lastPushDetected?: string;
     ciRef?: string;
@@ -85,6 +108,7 @@ export interface CI {
     image: { registry: string; repo: string; credentialsSecret?: string };
     /** Commit SHA to build. */
     revision?: string;
+    contextDir?: string;
   };
   status?: {
     phase?: CIPhase;

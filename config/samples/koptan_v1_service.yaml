@@ -16,3 +16,12 @@ spec:
     credentialsSecret: "example-registry"
   replicas: 2
   port: 8080
+  # Optional. Without a Dockerfile in the repository, one is generated for
+  # the detected stack (go, rust, java, dotnet, python, ruby, php, node, static).
+  build:
+    # Build context inside the repository, for monorepos.
+    contextDir: "services/api"
+    # An explicit Dockerfile, relative to the repository root.
+    # dockerfilePath: "services/api/Dockerfile.prod"
+    # Skip detection and generate the Dockerfile for this stack.
+    # language: "python"

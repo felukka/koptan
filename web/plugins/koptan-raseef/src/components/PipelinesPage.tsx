@@ -42,6 +42,23 @@ const progress = (phase?: string) =>
       ? 50
       : undefined;
 
+/** Where the Dockerfile came from, and the stack it was generated for. */
+const DockerfileOrigin = ({ service }: { service: Pipeline['service'] }) => {
+  const d = service.status?.detected;
+  if (service.status?.dockerfileSource !== 'template') {
+    return <Badge>From repository</Badge>;
+  }
+  const stack = [d?.language, d?.version, d?.framework ?? d?.packageManager]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <span title={d?.entrypoint ? `Starts ${d.entrypoint}` : undefined}>
+      <Badge variant="primary">Generated</Badge>{' '}
+      <span className="mz-code">{stack}</span>
+    </span>
+  );
+};
+
 const OriginCard = ({ service }: { service: Pipeline['service'] }) => (
   <div className="mz-card">
     <div className="mz-card-title">
@@ -57,6 +74,11 @@ const OriginCard = ({ service }: { service: Pipeline['service'] }) => (
     <Field label="Active Revision">
       <span className="mz-code">{service.spec.source.revision ?? 'main'}</span>
     </Field>
+    {service.status?.dockerfileSource && (
+      <Field label="Dockerfile">
+        <DockerfileOrigin service={service} />
+      </Field>
+    )}
     {service.status?.latestRevision && (
       <Field label="Latest Commit">
         <span className="mz-code">

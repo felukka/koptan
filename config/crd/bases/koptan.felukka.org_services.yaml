@@ -62,6 +62,39 @@ spec:
             type: object
           spec:
             properties:
+              build:
+                description: BuildSpec tunes how the image is built.
+                properties:
+                  contextDir:
+                    description: |-
+                      ContextDir is the build context, relative to the repository root
+                      (for a service inside a monorepo). Empty means the root.
+                    maxLength: 250
+                    pattern: ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$
+                    type: string
+                  dockerfilePath:
+                    description: |-
+                      DockerfilePath is the repository's Dockerfile, relative to the
+                      repository root. Empty means Dockerfile, Containerfile, docker/Dockerfile
+                      or build/Dockerfile in the context, else a generated one.
+                    maxLength: 250
+                    pattern: ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$
+                    type: string
+                  language:
+                    description: Language skips detection and generates the Dockerfile
+                      for this stack.
+                    enum:
+                    - go
+                    - rust
+                    - java
+                    - dotnet
+                    - python
+                    - ruby
+                    - php
+                    - node
+                    - static
+                    type: string
+                type: object
               env:
                 items:
                   description: EnvVar represents an environment variable present in
@@ -358,8 +391,30 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              detected:
+                description: Detected describes the stack discovery found.
+                properties:
+                  entrypoint:
+                    type: string
+                  framework:
+                    type: string
+                  language:
+                    type: string
+                  packageManager:
+                    type: string
+                  version:
+                    type: string
+                type: object
               dockerfileConfigMap:
                 description: DockerfileConfigMap holds the Dockerfile CI builds with.
+                type: string
+              dockerfileSource:
+                description: |-
+                  DockerfileSource says where the Dockerfile came from: the repository
+                  or a template generated from the detected stack.
+                enum:
+                - repo
+                - template
                 type: string
               error:
                 type: string
@@ -388,8 +443,9 @@ spec:
                 - Failed
                 type: string
               serviceType:
-                description: DiscoveredLanguage reveals what the AI decided if spec.language
-                  was empty
+                description: |-
+                  ServiceType is the detected language, or "dockerfile" when only the
+                  repository's own Dockerfile was found.
                 type: string
             type: object
         required:

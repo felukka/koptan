@@ -40,6 +40,8 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - web/
+      - agent/
 formatters:
   enable:
     - gofmt
@@ -50,3 +52,5 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - web/
+      - agent/

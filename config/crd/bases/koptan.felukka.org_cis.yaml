@@ -54,8 +54,16 @@ spec:
           spec:
             description: CISpec defines the desired state of a CI build.
             properties:
+              contextDir:
+                description: ContextDir is the build context relative to the repository
+                  root.
+                maxLength: 250
+                pattern: ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$
+                type: string
               dockerfileConfigMap:
-                description: DockerfileConfigMap holds the Dockerfile (key "Dockerfile").
+                description: |-
+                  DockerfileConfigMap holds the Dockerfile (key "Dockerfile") and,
+                  optionally, a default .dockerignore (key ".dockerignore").
                 type: string
               extraSteps:
                 items:

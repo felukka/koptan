@@ -100,3 +100,16 @@ func TestResolveRevision(t *testing.T) {
 		t.Errorf("HasRevisionChanged(dev, same) = %v, %v", changed, err)
 	}
 }
+
+func TestValidateRelPath(t *testing.T) {
+	for _, ok := range []string{"", "services/api", "a", "a.b/c_d-e"} {
+		if err := ValidateRelPath("contextDir", ok); err != nil {
+			t.Errorf("%q: unexpected error %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"/abs", "..", "a/../b", "./a", "a//b", "a/", "a b", "-x/../.."} {
+		if err := ValidateRelPath("contextDir", bad); err == nil {
+			t.Errorf("%q: expected an error", bad)
+		}
+	}
+}

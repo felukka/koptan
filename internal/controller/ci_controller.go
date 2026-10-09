@@ -179,7 +179,7 @@ func validateBuild(ci *koptanv1.CI, svc *koptanv1.Service) error {
 	if ci.Spec.Registry.Registry == "" || ci.Spec.Registry.Repo == "" {
 		return fmt.Errorf("spec.image.registry and spec.image.repo are required")
 	}
-	return nil
+	return utils.ValidateRelPath("spec.contextDir", ci.Spec.ContextDir)
 }
 
 // registrySecret returns the dockerconfigjson Secret used to push: the

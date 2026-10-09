@@ -68,9 +68,16 @@ type CISpec struct {
 	// +optional
 	Revision string `json:"revision,omitempty"`
 
-	// DockerfileConfigMap holds the Dockerfile (key "Dockerfile").
+	// DockerfileConfigMap holds the Dockerfile (key "Dockerfile") and,
+	// optionally, a default .dockerignore (key ".dockerignore").
 	// +optional
 	DockerfileConfigMap string `json:"dockerfileConfigMap,omitempty"`
+
+	// ContextDir is the build context relative to the repository root.
+	// +kubebuilder:validation:MaxLength=250
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`
+	// +optional
+	ContextDir string `json:"contextDir,omitempty"`
 
 	// +optional
 	ExtraSteps []corev1.Container `json:"extraSteps,omitempty"`
