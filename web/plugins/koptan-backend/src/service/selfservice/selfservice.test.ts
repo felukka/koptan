@@ -95,9 +95,10 @@ describe('self service', () => {
       port: 8080,
       path: '/runs',
     });
-    expect(init.headers?.Authorization).toBe(
-      `Bearer ${agentToken('koptan-test-key', 'team', 'shop')}`,
+    expect(init.headers?.['X-Koptan-Agent-Token']).toBe(
+      agentToken('koptan-test-key', 'team', 'shop'),
     );
+    expect(init.headers?.Authorization).toBeUndefined();
     await expect(
       new AgentClient(client, undefined).runs('team', 'shop'),
     ).rejects.toThrow('koptan.agentKey');

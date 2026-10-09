@@ -105,7 +105,13 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-        volumeMounts: []
-      volumes: []
+        # Discovery clones repositories into /tmp; the root stays read-only.
+        volumeMounts:
+          - name: tmp
+            mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

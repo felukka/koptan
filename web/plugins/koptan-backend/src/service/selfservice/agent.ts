@@ -32,7 +32,8 @@ export class AgentClient {
       );
     }
     return {
-      Authorization: `Bearer ${agentToken(this.key, namespace, name)}`,
+      // Not Authorization: the API server's service proxy drops it.
+      'X-Koptan-Agent-Token': agentToken(this.key, namespace, name),
       'Content-Type': 'application/json',
     };
   }

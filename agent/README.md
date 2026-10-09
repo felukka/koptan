@@ -12,7 +12,8 @@ koptan-agent run "add a /health endpoint"
 
 ## API
 
-All routes except `/healthz` need `Authorization: Bearer $KOPTAN_AGENT_TOKEN`.
+All routes except `/healthz` need the header `X-Koptan-Agent-Token: $KOPTAN_AGENT_TOKEN`
+(not `Authorization`, which the Kubernetes service proxy drops).
 
 - `GET /healthz`: `{ ok, busy }`.
 - `GET /runs`: the last 50 runs, newest first.

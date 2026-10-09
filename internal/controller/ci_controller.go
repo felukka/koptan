@@ -45,7 +45,7 @@ func NewCIReconciler(c client.Client, s *runtime.Scheme) *CIReconciler {
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=services,verbs=get;list;watch
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=ciplugins,verbs=get;list;watch
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cds,verbs=get;list;watch;create;update;patch
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete;deletecollection
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 
 // Reconcile builds spec.revision once per revision and spec generation.

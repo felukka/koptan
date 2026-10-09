@@ -72,7 +72,9 @@ export const RunHistory = ({ runs }: { runs: AgentRun[] }) => (
               }
             />
           </td>
-          <td className="mz-code">{r.commit ? r.commit.slice(0, 12) : '—'}</td>
+          <td className={r.commit ? 'mz-code' : 'mz-muted'}>
+            {r.commit ? r.commit.slice(0, 12) : '—'}
+          </td>
           <td className="mz-muted">{new Date(r.startedAt).toLocaleString()}</td>
         </tr>
       ))}

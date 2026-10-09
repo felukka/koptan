@@ -26,7 +26,7 @@ async function start() {
     fetch(base + path, {
       ...init,
       headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(token ? { 'X-Koptan-Agent-Token': token } : {}),
         ...init.headers,
       },
     });

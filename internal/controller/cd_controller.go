@@ -11,6 +11,7 @@ import (
 	koptanv1 "github.com/felukka/koptan/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -87,13 +88,20 @@ func (r *CDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	}
 
 	deploy, err := r.reconcileDeployment(ctx, &cd, image)
+	if apierrors.IsConflict(err) {
+		// Someone (often the Deployment controller) updated it meanwhile;
+		// retry with a fresh copy instead of reporting a failure.
+		return ctrl.Result{Requeue: true}, nil
+	}
 	if err != nil {
 		setCDCondition(&cd, koptanv1.CDPhaseFailed, metav1.ConditionFalse, "DeploymentFailed",
 			fmt.Sprintf("create/update deployment: %v", err))
 		_ = r.patchStatus(ctx, orig, &cd)
 		return ctrl.Result{}, err
 	}
-	if err := r.reconcileService(ctx, &cd); err != nil {
+	if err := r.reconcileService(ctx, &cd); apierrors.IsConflict(err) {
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
 		setCDCondition(&cd, koptanv1.CDPhaseFailed, metav1.ConditionFalse, "ServiceFailed",
 			fmt.Sprintf("create/update service: %v", err))
 		_ = r.patchStatus(ctx, orig, &cd)

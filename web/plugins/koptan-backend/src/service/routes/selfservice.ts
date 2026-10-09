@@ -40,6 +40,11 @@ function agentFailure(e: unknown): unknown {
   if (status === 409)
     return new ConflictError('the agent is already working on a prompt');
   if (status === 404) return new NotFoundError(message);
+  if (status === 401) {
+    return new ServiceUnavailableError(
+      'the agent rejected its token; koptan.agentKey must equal the operator KOPTAN_AGENT_KEY',
+    );
+  }
   if (status === 503 || (e as { code?: string }).code === 'ECONNREFUSED') {
     return new ServiceUnavailableError('the agent is not running yet');
   }

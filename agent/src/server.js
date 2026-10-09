@@ -13,9 +13,13 @@ const json = (res, status, body) => {
   res.end(JSON.stringify(body));
 };
 
+/** The token travels in its own header: the Kubernetes API server's
+ * service proxy drops Authorization, which it reads as its own credentials. */
+export const TOKEN_HEADER = 'x-koptan-agent-token';
+
 function authorized(req, token) {
-  const given = Buffer.from(req.headers.authorization ?? '');
-  const want = Buffer.from(`Bearer ${token}`);
+  const given = Buffer.from(String(req.headers[TOKEN_HEADER] ?? ''));
+  const want = Buffer.from(token);
   return given.length === want.length && timingSafeEqual(given, want);
 }
 
