@@ -196,7 +196,7 @@ func (r *CIReconciler) registrySecret(ctx context.Context, ci *koptanv1.CI) (str
 		}
 		return name, nil
 	}
-	creds := ci.Spec.Registry.Creds
+	creds := ci.Spec.Registry.Creds //nolint:staticcheck // deprecated Creds still supported for backward compatibility
 	if creds == nil {
 		return "", nil
 	}
@@ -239,7 +239,7 @@ func (r *CIReconciler) ensureCD(ctx context.Context, ci *koptanv1.CI, svc *kopta
 		cd.Labels[labelCI] = ci.Name
 		cd.Spec.CI.Name = ci.Name
 		cd.Spec.ImagePullSecret = ci.Spec.Registry.CredentialsSecret
-		if cd.Spec.ImagePullSecret == "" && ci.Spec.Registry.Creds != nil {
+		if cd.Spec.ImagePullSecret == "" && ci.Spec.Registry.Creds != nil { //nolint:staticcheck // deprecated Creds still supported for backward compatibility
 			cd.Spec.ImagePullSecret = ci.Name + "-registry"
 		}
 		applyServiceToCD(svc, cd)
