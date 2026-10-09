@@ -4,6 +4,7 @@ import './styles/tokens.css';
 import './styles/layout.css';
 import './styles/status.css';
 import './styles/forms.css';
+import './styles/session.css';
 import { PageHeader } from './PageHeader';
 
 /** Shared page frame: Minzar header above the page content. */

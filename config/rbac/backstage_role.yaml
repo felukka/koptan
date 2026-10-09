@@ -4,7 +4,10 @@
 # git token and registry credentials as Secrets (owned by the Service, deleted
 # again if the Service cannot be created), and read node status for the Bay.
 # CIPlugins are listed for the Scan Bay; Alerts are listed and created (their
-# channel URLs go to an owned Secret) for the Signal Mast.
+# channel URLs go to an owned Secret) for the Signal Mast. SelfServices are
+# listed and created; prompts reach each agent through the services/proxy
+# subresource, and a pushed commit annotates (patches) the koptan Service so
+# the operator builds it at once.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -20,6 +23,7 @@ rules:
       - cis
       - cds
       - alerts
+      - selfservices
     verbs:
       - get
       - list
@@ -28,11 +32,24 @@ rules:
   - apiGroups:
       - koptan.felukka.org
     resources:
+      - services
+    verbs:
+      - patch
+  - apiGroups:
+      - koptan.felukka.org
+    resources:
       - ciplugins
     verbs:
       - get
       - list
       - watch
+  - apiGroups:
+      - ""
+    resources:
+      - services/proxy
+    verbs:
+      - get
+      - create
   - apiGroups:
       - ""
     resources:

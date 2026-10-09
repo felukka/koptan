@@ -109,6 +109,23 @@ export class KubeKoptanClient implements KoptanClient {
     })) as RawResource;
   }
 
+  async annotate(
+    kind: KoptanKind,
+    namespace: string,
+    name: string,
+    annotations: Record<string, string>,
+  ): Promise<void> {
+    await this.api.patchNamespacedCustomObject(
+      {
+        ...this.base(kind),
+        namespace,
+        name,
+        body: { metadata: { annotations } },
+      },
+      setHeaderOptions('Content-Type', PatchStrategy.MergePatch),
+    );
+  }
+
   async createSecret(
     namespace: string,
     name: string,

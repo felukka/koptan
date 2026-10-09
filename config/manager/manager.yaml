@@ -65,6 +65,18 @@ spec:
           - --health-probe-bind-address=:8081
         image: controller:latest
         name: manager
+        env:
+          # Derives each SelfService agent's API token; the Backstage backend
+          # needs the same value (koptan.agentKey). Without it SelfServices
+          # are disabled. Create it with:
+          #   kubectl -n koptan-system create secret generic koptan-agent-key \
+          #     --from-literal=key=$(openssl rand -hex 32)
+          - name: KOPTAN_AGENT_KEY
+            valueFrom:
+              secretKeyRef:
+                name: koptan-agent-key
+                key: key
+                optional: true
         ports: []
         securityContext:
           readOnlyRootFilesystem: true

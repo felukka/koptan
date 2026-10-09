@@ -14,6 +14,7 @@ export interface FakeCalls {
   owners: [string, string][];
   deleted: string[];
   proxied: [ProxyTarget, ProxyRequest][];
+  annotated: [KoptanKind, string, Record<string, string>][];
 }
 
 export interface FakeOptions {
@@ -35,6 +36,7 @@ export function fakeClient(opts: FakeOptions = {}) {
     owners: [],
     deleted: [],
     proxied: [],
+    annotated: [],
   };
   const objects = (kind: KoptanKind) => opts.objects?.[kind] ?? [];
   const client: KoptanClient = {
@@ -51,6 +53,9 @@ export function fakeClient(opts: FakeOptions = {}) {
       if (opts.failCreate) throw opts.failCreate;
       calls.created.push([kind, body]);
       return { ...body, metadata: { ...body.metadata, uid: 'uid-1' } };
+    },
+    annotate: async (kind, _ns, name, annotations) => {
+      calls.annotated.push([kind, name, annotations]);
     },
     createSecret: async (_ns, name, data, type) => {
       calls.secrets.push([name, data, type]);

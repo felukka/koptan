@@ -153,9 +153,12 @@ kubernetes:
       plural: cds
 # Koptan plugin (web/plugins/koptan-backend). Uses your kubeconfig, or the pod's
 # service account in-cluster. Both settings are optional.
-# koptan:
-#   namespace: default      # limit to one namespace; omit for all namespaces
-#   kubeContext: kind-koptan
+koptan:
+  # namespace: default      # limit to one namespace; omit for all namespaces
+  # kubeContext: kind-koptan
+  # Must equal the operator's KOPTAN_AGENT_KEY (Secret koptan-agent-key) for
+  # the Self Service page to reach the agents.
+  agentKey: ${KOPTAN_AGENT_KEY}
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:
   # setting this to `false` will disable permissions

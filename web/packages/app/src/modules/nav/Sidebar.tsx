@@ -20,6 +20,7 @@ import { SidebarLogo } from './SidebarLogo';
 const KOPTAN_PAGES = [
   'page:koptan-bay',
   'page:koptan-raseef',
+  'page:koptan-self-service',
   'page:koptan-scan-bay',
   'page:koptan-signal-mast',
 ];

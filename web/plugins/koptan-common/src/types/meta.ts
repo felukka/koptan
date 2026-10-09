@@ -9,6 +9,7 @@ export const KOPTAN_PLURALS = {
   CD: 'cds',
   CIPlugin: 'ciplugins',
   Alert: 'alerts',
+  SelfService: 'selfservices',
 } as const;
 
 export interface Condition {

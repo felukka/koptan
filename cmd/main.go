@@ -40,7 +40,7 @@ func main() {
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
 	var tlsOpts []func(*tls.Config)
-	var defaultRegistry string
+	var defaultRegistry, agentImage string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -55,6 +55,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "Metrics certificate key file name.")
 	flag.StringVar(&defaultRegistry, "default-registry", envOr("KOPTAN_DEFAULT_REGISTRY", "docker.io"),
 		"Registry used when a Service sets no spec.image.registry (env KOPTAN_DEFAULT_REGISTRY).")
+	flag.StringVar(&agentImage, "agent-image", envOr("KOPTAN_AGENT_IMAGE", "ghcr.io/felukka/koptan-agent:latest"),
+		"Image of the SelfService agent session (env KOPTAN_AGENT_IMAGE). The agent key comes from KOPTAN_AGENT_KEY.")
 
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
@@ -136,6 +138,16 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Alert")
+		os.Exit(1)
+	}
+
+	if err := (&controller.SelfServiceReconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		AgentImage: agentImage,
+		AgentKey:   os.Getenv("KOPTAN_AGENT_KEY"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SelfService")
 		os.Exit(1)
 	}
 

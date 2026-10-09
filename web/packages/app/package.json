@@ -36,6 +36,7 @@
     "@internal/plugin-koptan-bay": "workspace:^",
     "@internal/plugin-koptan-raseef": "workspace:^",
     "@internal/plugin-koptan-scan-bay": "workspace:^",
+    "@internal/plugin-koptan-self-service": "workspace:^",
     "@internal/plugin-koptan-signal-mast": "workspace:^",
     "@material-ui/core": "^4.12.2",
     "@material-ui/icons": "^4.9.1",

@@ -27,14 +27,17 @@ export const koptanPlugin = createBackendPlugin({
       }) {
         permissionsRegistry.addPermissions(koptanPermissions);
         httpRouter.use(
-          await createRouter({
-            client: KubeKoptanClient.fromDefault(
-              config.getOptionalString('koptan.kubeContext'),
-            ),
-            httpAuth,
-            permissions,
-            namespace: config.getOptionalString('koptan.namespace'),
-          }),
+          await createRouter(
+            {
+              client: KubeKoptanClient.fromDefault(
+                config.getOptionalString('koptan.kubeContext'),
+              ),
+              httpAuth,
+              permissions,
+              namespace: config.getOptionalString('koptan.namespace'),
+            },
+            { agentKey: config.getOptionalString('koptan.agentKey') },
+          ),
         );
       },
     });

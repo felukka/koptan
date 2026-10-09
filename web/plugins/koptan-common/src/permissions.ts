@@ -10,7 +10,20 @@ export const koptanAlertCreatePermission = createPermission({
   attributes: { action: 'create' },
 });
 
+export const koptanSelfServiceCreatePermission = createPermission({
+  name: 'koptan.selfservice.create',
+  attributes: { action: 'create' },
+});
+
+/** Sending a prompt changes code and deploys it, so it has its own permission. */
+export const koptanSelfServicePromptPermission = createPermission({
+  name: 'koptan.selfservice.prompt',
+  attributes: { action: 'update' },
+});
+
 export const koptanPermissions = [
   koptanPipelineCreatePermission,
   koptanAlertCreatePermission,
+  koptanSelfServiceCreatePermission,
+  koptanSelfServicePromptPermission,
 ];

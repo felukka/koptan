@@ -91,6 +91,16 @@ cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
 
 .PHONY: lint
+AGENT_IMG ?= ghcr.io/felukka/koptan-agent:latest
+
+.PHONY: agent-test
+agent-test: ## Run the SelfService agent tests.
+	cd agent && npm ci --no-audit --no-fund && npm test
+
+.PHONY: agent-image
+agent-image: ## Build the SelfService agent image.
+	$(CONTAINER_TOOL) build -t ${AGENT_IMG} agent
+
 check-lines: ## Fail if any source file exceeds 500 lines.
 	./hack/check-lines.sh
 

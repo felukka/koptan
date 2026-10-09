@@ -61,6 +61,9 @@ type ServiceReconciler struct {
 // Reconcile implements the Service reconciliation loop.
 // Lifecycle: Pending -> Discovering -> Ready (CI created). On Ready it polls
 // git and moves the CI to new commits; spec changes trigger a new discovery.
+// Any update to the Service, such as the koptan.felukka.org/refresh
+// annotation the Backstage backend sets after a SelfService push, triggers
+// a reconcile and so an immediate poll.
 func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 

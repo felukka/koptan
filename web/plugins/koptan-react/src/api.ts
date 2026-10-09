@@ -1,16 +1,21 @@
 import { fetchApiRef, useApi } from '@backstage/frontend-plugin-api';
 import type {
   ActivityEntry,
+  AgentEvent,
+  AgentRun,
   Alert,
   ClusterInfo,
   CreateAlertRequest,
   CreatePipelineRequest,
+  CreateSelfServiceRequest,
   Overview,
   Pipeline,
   ScanBay,
+  SelfService,
   SignalMast,
 } from '@internal/plugin-koptan-common';
 import { useCallback } from 'react';
+import { readEvents } from './sse';
 
 const post = (body: unknown): RequestInit => ({
   method: 'POST',
@@ -69,6 +74,42 @@ export function useKoptanApi() {
       json<Alert>(await fetch('plugin://koptan/alerts', post(req))),
     [fetch],
   );
+  const getSelfServices = useCallback(
+    async () =>
+      json<SelfService[]>(await fetch('plugin://koptan/selfservices')),
+    [fetch],
+  );
+  const createSelfService = useCallback(
+    async (req: CreateSelfServiceRequest) =>
+      json<SelfService>(await fetch('plugin://koptan/selfservices', post(req))),
+    [fetch],
+  );
+  const getAgentRuns = useCallback(
+    async (namespace: string, name: string) =>
+      json<AgentRun[]>(
+        await fetch(
+          `plugin://koptan/selfservices/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/runs`,
+        ),
+      ),
+    [fetch],
+  );
+  /** Sends a prompt and streams the agent's events until the run ends. */
+  const runPrompt = useCallback(
+    async (
+      namespace: string,
+      name: string,
+      prompt: string,
+      onEvent: (e: AgentEvent) => void,
+    ) => {
+      const res = await fetch(
+        `plugin://koptan/selfservices/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/runs`,
+        post({ prompt }),
+      );
+      if (!res.ok) await json(res);
+      await readEvents(res, onEvent);
+    },
+    [fetch],
+  );
   return {
     getOverview,
     getPipelines,
@@ -78,5 +119,9 @@ export function useKoptanApi() {
     createPipeline,
     getSignalMast,
     createAlert,
+    getSelfServices,
+    createSelfService,
+    getAgentRuns,
+    runPrompt,
   };
 }

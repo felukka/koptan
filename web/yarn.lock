@@ -4453,6 +4453,24 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@internal/plugin-koptan-self-service@workspace:^, @internal/plugin-koptan-self-service@workspace:plugins/koptan-self-service":
+  version: 0.0.0-use.local
+  resolution: "@internal/plugin-koptan-self-service@workspace:plugins/koptan-self-service"
+  dependencies:
+    "@backstage/cli": "npm:^0.36.6"
+    "@backstage/core-components": "npm:^0.18.14"
+    "@backstage/frontend-plugin-api": "npm:^0.18.1"
+    "@backstage/ui": "npm:^0.18.0"
+    "@internal/plugin-koptan-common": "workspace:^"
+    "@internal/plugin-koptan-react": "workspace:^"
+    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
+    react-router-dom: "npm:^6.30.2"
+    react-use: "npm:^17.2.4"
+  peerDependencies:
+    react: ^16.13.1 || ^17.0.0 || ^18.0.0
+  languageName: unknown
+  linkType: soft
+
 "@internal/plugin-koptan-signal-mast@workspace:^, @internal/plugin-koptan-signal-mast@workspace:plugins/koptan-signal-mast":
   version: 0.0.0-use.local
   resolution: "@internal/plugin-koptan-signal-mast@workspace:plugins/koptan-signal-mast"
@@ -10270,6 +10288,7 @@ __metadata:
     "@internal/plugin-koptan-bay": "workspace:^"
     "@internal/plugin-koptan-raseef": "workspace:^"
     "@internal/plugin-koptan-scan-bay": "workspace:^"
+    "@internal/plugin-koptan-self-service": "workspace:^"
     "@internal/plugin-koptan-signal-mast": "workspace:^"
     "@material-ui/core": "npm:^4.12.2"
     "@material-ui/icons": "npm:^4.9.1"

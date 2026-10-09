@@ -26,6 +26,13 @@ export interface KoptanClient {
     namespace: string,
     body: RawResource,
   ): Promise<RawResource>;
+  /** Merges annotations into a Koptan resource. */
+  annotate(
+    kind: KoptanKind,
+    namespace: string,
+    name: string,
+    annotations: Record<string, string>,
+  ): Promise<void>;
   /** Creates a Secret (Opaque unless a type is given) holding string data. */
   createSecret(
     namespace: string,

@@ -66,6 +66,7 @@ rules:
   - cds/status
   - ciplugins/status
   - cis/status
+  - selfservices/status
   - services/status
   verbs:
   - get
@@ -90,6 +91,17 @@ rules:
   resources:
   - cds/finalizers
   - cis/finalizers
+  - selfservices/finalizers
   - services/finalizers
   verbs:
   - update
+- apiGroups:
+  - koptan.felukka.org
+  resources:
+  - selfservices
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch

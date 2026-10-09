@@ -1,0 +1,21 @@
+{
+  "name": "@felukka/koptan-agent",
+  "version": "0.1.0",
+  "description": "Koptan SelfService agent: turns prompts into commits on a git repository.",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "koptan-agent": "bin/koptan-agent.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node bin/koptan-agent.js serve",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.128.0"
+  }
+}

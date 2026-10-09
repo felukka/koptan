@@ -56,4 +56,13 @@ resources:
   kind: Alert
   path: github.com/felukka/koptan/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: felukka.org
+  group: koptan
+  kind: SelfService
+  path: github.com/felukka/koptan/api/v1
+  version: v1
 version: "3"

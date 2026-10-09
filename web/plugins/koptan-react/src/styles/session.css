@@ -1,0 +1,53 @@
+/* Minzar session list, prompt box and live agent log (Self Service). */
+.mz-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+.mz-card--link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 120ms ease;
+}
+.mz-card--link:hover {
+  border-color: var(--mz-primary);
+}
+.mz-textarea {
+  resize: vertical;
+  min-height: 110px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.mz-log {
+  margin-top: 16px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--mz-surface);
+  border: 1px solid var(--mz-outline-variant);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  display: grid;
+  gap: 6px;
+}
+.mz-log-line {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.mz-log-line--status {
+  color: var(--mz-secondary);
+}
+.mz-log-line--tool_result {
+  color: var(--mz-outline);
+  padding-left: 16px;
+}
+.mz-log-line--done {
+  color: var(--mz-success);
+}
+.mz-log-line--error {
+  color: var(--mz-error);
+}
