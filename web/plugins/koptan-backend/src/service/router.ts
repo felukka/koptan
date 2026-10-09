@@ -1,5 +1,6 @@
 import express from 'express';
 import Router from 'express-promise-router';
+import { alertRoutes } from './routes/alerts';
 import type { RouteContext } from './routes/context';
 import { pipelineRoutes } from './routes/pipelines';
 import { pluginRoutes } from './routes/plugins';
@@ -10,5 +11,6 @@ export async function createRouter(ctx: RouteContext): Promise<express.Router> {
   router.use(express.json());
   pipelineRoutes(router, ctx);
   pluginRoutes(router, ctx);
+  alertRoutes(router, ctx);
   return router;
 }

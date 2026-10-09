@@ -1,14 +1,4 @@
-/** API group and version of the Koptan CRDs (see koptan/api/v1). */
-export const KOPTAN_GROUP = 'koptan.felukka.org';
-export const KOPTAN_VERSION = 'v1';
-
-/** Plural resource names for each Koptan kind. */
-export const KOPTAN_PLURALS = {
-  Service: 'services',
-  CI: 'cis',
-  CD: 'cds',
-  CIPlugin: 'ciplugins',
-} as const;
+import type { Condition, EnvVar, ObjectMeta } from './meta';
 
 export type ServicePhase =
   | 'Pending'
@@ -24,31 +14,11 @@ export type CIPhase =
   | 'Failed';
 export type CDPhase = 'Waiting' | 'Deploying' | 'Running' | 'Failed';
 
-export interface Condition {
-  type: string;
-  status: string;
-  reason?: string;
-  message?: string;
-  lastTransitionTime?: string;
-}
-
-export interface ObjectMeta {
-  name: string;
-  namespace?: string;
-  creationTimestamp?: string;
-  generation?: number;
-}
-
 export interface SourceRef {
   repo: string;
   revision?: string;
   /** Secret holding the git token; the token itself is never returned. */
   secretRef?: { name: string; key: string };
-}
-
-export interface EnvVar {
-  name: string;
-  value?: string;
 }
 
 /** How the image is built (Service spec.build). */
@@ -219,45 +189,4 @@ export interface ActivityEntry {
   namespace?: string;
   message: string;
   severity: 'info' | 'success' | 'error';
-}
-
-export type CIPluginType = 'sonarqube' | 'codeql' | 'custom';
-
-/** A pluggable CI step (SonarQube, CodeQL, custom) run before build/push. */
-export interface CIPlugin {
-  metadata: ObjectMeta;
-  spec: {
-    type: CIPluginType;
-    order?: number;
-    failurePolicy?: 'Fail' | 'Ignore';
-    targetRefs?: { kind?: string; name: string }[];
-    selector?: { matchLabels?: Record<string, string> };
-    sonarqube?: { hostURL: string; projectKey?: string };
-    codeql?: {
-      languages?: string[];
-      querySuite?: string;
-      failOnSeverity?: string;
-    };
-    custom?: { image: string; command?: string[]; args?: string[] };
-  };
-  status?: {
-    attachedServices?: string[];
-    conditions?: Condition[];
-  };
-}
-
-/** The latest plugin results of one Service's CI. */
-export interface PluginRun {
-  service: string;
-  namespace?: string;
-  ci: string;
-  revision?: string;
-  phase?: CIPhase;
-  results: PluginResult[];
-}
-
-/** GET /plugins: every CIPlugin and the latest runs. */
-export interface ScanBay {
-  plugins: CIPlugin[];
-  runs: PluginRun[];
 }

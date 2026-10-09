@@ -5,4 +5,12 @@ export const koptanPipelineCreatePermission = createPermission({
   attributes: { action: 'create' },
 });
 
-export const koptanPermissions = [koptanPipelineCreatePermission];
+export const koptanAlertCreatePermission = createPermission({
+  name: 'koptan.alert.create',
+  attributes: { action: 'create' },
+});
+
+export const koptanPermissions = [
+  koptanPipelineCreatePermission,
+  koptanAlertCreatePermission,
+];

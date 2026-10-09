@@ -1,13 +1,22 @@
 import { fetchApiRef, useApi } from '@backstage/frontend-plugin-api';
 import type {
   ActivityEntry,
+  Alert,
   ClusterInfo,
+  CreateAlertRequest,
   CreatePipelineRequest,
   Overview,
   Pipeline,
   ScanBay,
+  SignalMast,
 } from '@internal/plugin-koptan-common';
 import { useCallback } from 'react';
+
+const post = (body: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -48,13 +57,16 @@ export function useKoptanApi() {
   );
   const createPipeline = useCallback(
     async (req: CreatePipelineRequest) =>
-      json<Pipeline>(
-        await fetch('plugin://koptan/pipelines', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req),
-        }),
-      ),
+      json<Pipeline>(await fetch('plugin://koptan/pipelines', post(req))),
+    [fetch],
+  );
+  const getSignalMast = useCallback(
+    async () => json<SignalMast>(await fetch('plugin://koptan/alerts')),
+    [fetch],
+  );
+  const createAlert = useCallback(
+    async (req: CreateAlertRequest) =>
+      json<Alert>(await fetch('plugin://koptan/alerts', post(req))),
     [fetch],
   );
   return {
@@ -64,5 +76,7 @@ export function useKoptanApi() {
     getCluster,
     getScanBay,
     createPipeline,
+    getSignalMast,
+    createAlert,
   };
 }

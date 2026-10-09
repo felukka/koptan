@@ -3,7 +3,8 @@
 # It lists every Koptan resource and can create a Service from the UI, store the
 # git token and registry credentials as Secrets (owned by the Service, deleted
 # again if the Service cannot be created), and read node status for the Bay.
-# CIPlugins are listed for the Scan Bay.
+# CIPlugins are listed for the Scan Bay; Alerts are listed and created (their
+# channel URLs go to an owned Secret) for the Signal Mast.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -18,6 +19,7 @@ rules:
       - services
       - cis
       - cds
+      - alerts
     verbs:
       - get
       - list
