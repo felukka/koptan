@@ -11,7 +11,8 @@
       "packages/**/*",
       "plugins/**/*",
       "*.json",
-      "*.md"
+      "*.md",
+      "!packages/app/public/index.html"
     ]
   },
   "formatter": {

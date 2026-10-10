@@ -1,0 +1,37 @@
+---
+name: Web
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - web/**
+  pull_request:
+    paths:
+      - web/**
+jobs:
+  build:
+    name: Build and test the UI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install
+        run: yarn install --immutable
+      - name: Lint
+        run: npx --yes @biomejs/biome@2.4.15 check .
+      - name: Type check
+        run: yarn tsc
+      - name: Test
+        run: yarn test --ci
+      - name: Build backend
+        run: yarn build:backend

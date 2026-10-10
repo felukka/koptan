@@ -8,11 +8,15 @@ on:
       - internal/**
       - api/**
       - cmd/**
+      - go.mod
+      - go.sum
   pull_request:
     paths:
       - internal/**
       - api/**
       - cmd/**
+      - go.mod
+      - go.sum
 jobs:
   test:
     name: Run on Ubuntu
