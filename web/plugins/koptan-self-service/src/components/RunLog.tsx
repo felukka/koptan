@@ -34,6 +34,7 @@ export const EventLog = ({ events }: { events: AgentEvent[] }) => (
   <div className="mz-log" aria-live="polite">
     {events.map((e, i) => (
       <div
+        // biome-ignore lint/suspicious/noArrayIndexKey: the log is append-only
         key={i}
         className={`mz-log-line mz-log-line--${e.type}${e.type === 'tool_result' && e.isError ? ' mz-log-line--error' : ''}`}
       >

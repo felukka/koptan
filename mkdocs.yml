@@ -2,6 +2,29 @@
 site_name: Koptan's Documentation
 repo_url: https://github.com/felukka/koptan
 site_url: https://koptan.felukka.org
+nav:
+  - Home: index.md
+  - Getting started:
+      - Prerequisites: getting-started/prerequisites.md
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Resources:
+      - Service: resources/service.md
+      - CI: resources/ci.md
+      - CD: resources/cd.md
+      - CIPlugin: resources/ciplugin.md
+      - Alert: resources/alert.md
+      - SelfService: resources/selfservice.md
+  - Helm charts:
+      - koptan: helm/koptan.md
+      - koptan-ui: helm/koptan-ui.md
+  - UI: ui/overview.md
+  - Configuration:
+      - Operator: configuration/operator.md
+      - Security: configuration/security.md
+  - Reference:
+      - Troubleshooting: reference/troubleshooting.md
+      - FAQ: reference/faq.md
 theme:
   name: material
   icon:
