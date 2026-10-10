@@ -1,7 +1,7 @@
-import { koptanRaseefPlugin } from './plugin';
+import { ServicePlugin } from './plugin';
 
-describe('koptan-raseef', () => {
+describe('koptan-service', () => {
   it('should export plugin', () => {
-    expect(koptanRaseefPlugin).toBeDefined();
+    expect(ServicePlugin).toBeDefined();
   });
 });

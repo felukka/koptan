@@ -1,16 +1,23 @@
 import { Progress } from '@backstage/core-components';
-import {
-  useApi,
-  fetchApiRef,
-} from '@backstage/frontend-plugin-api';
+import { useApi, fetchApiRef } from '@backstage/frontend-plugin-api';
 import { Header, Container } from '@backstage/ui';
 import useAsync from 'react-use/esm/useAsync';
 import { TodoList } from '../TodoList';
 import type { TodoItem } from '../TodoList';
 
 const exampleTodos: TodoItem[] = [
-  { id: '1', title: 'Install the backend plugin', createdBy: 'user:default/guest', createdAt: new Date().toISOString() },
-  { id: '2', title: 'Connect the frontend to real data', createdBy: 'user:default/guest', createdAt: new Date().toISOString() },
+  {
+    id: '1',
+    title: 'Install the backend plugin',
+    createdBy: 'user:default/guest',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    title: 'Connect the frontend to real data',
+    createdBy: 'user:default/guest',
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 // TEMPLATE NOTE:
