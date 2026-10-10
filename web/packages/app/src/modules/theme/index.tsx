@@ -59,4 +59,3 @@ export const themeModule = createFrontendModule({
   pluginId: 'app',
   extensions: [felukkaTheme],
 });
-

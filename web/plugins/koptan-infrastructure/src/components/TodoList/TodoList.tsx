@@ -12,17 +12,19 @@ const columns: ColumnConfig<TodoItem>[] = [
     id: 'title',
     label: 'Title',
     isRowHeader: true,
-    cell: item => <CellText title={item.title} />,
+    cell: (item) => <CellText title={item.title} />,
   },
   {
     id: 'createdBy',
     label: 'Created by',
-    cell: item => <CellText title={item.createdBy} />,
+    cell: (item) => <CellText title={item.createdBy} />,
   },
   {
     id: 'createdAt',
     label: 'Created at',
-    cell: item => <CellText title={new Date(item.createdAt).toLocaleString()} />,
+    cell: (item) => (
+      <CellText title={new Date(item.createdAt).toLocaleString()} />
+    ),
   },
 ];
 

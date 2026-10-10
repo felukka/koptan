@@ -16,7 +16,12 @@ describe('TodoPage', () => {
       http.get('*/api/koptan-monitoring/todos', () =>
         HttpResponse.json({
           items: [
-            { id: '1', title: 'Mocked task', createdBy: 'user:default/guest', createdAt: '2025-01-01T00:00:00.000Z' },
+            {
+              id: '1',
+              title: 'Mocked task',
+              createdBy: 'user:default/guest',
+              createdAt: '2025-01-01T00:00:00.000Z',
+            },
           ],
         }),
       ),
@@ -39,6 +44,8 @@ describe('TodoPage', () => {
 
     await renderInTestApp(<TodoPage />);
 
-    expect(await screen.findByText('Install the backend plugin')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Install the backend plugin'),
+    ).toBeInTheDocument();
   });
 });

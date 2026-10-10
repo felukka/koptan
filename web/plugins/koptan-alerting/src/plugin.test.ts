@@ -1,6 +1,6 @@
 import { AlertingPlugin } from './plugin';
 
-describe('koptan-signal-mast', () => {
+describe('koptan-alerting', () => {
   it('should export plugin', () => {
     expect(AlertingPlugin).toBeDefined();
   });
