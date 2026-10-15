@@ -171,7 +171,7 @@ spec:
 | `sonarqube.projectKey` | string | No | `<namespace>_<service>` | SonarQube project key. |
 | `sonarqube.waitForQualityGate` | bool | No | `true` | Fail the step when the quality gate fails. |
 | `sonarqube.extraArgs` | list of string | No | — | Extra `sonar-scanner` arguments, such as `-Dsonar.exclusions=...`. |
-| `sonarqube.image` | string | No | `sonarsource/sonar-scanner-cli:11` | Scanner image. |
+| `sonarqube.image` | string | No | `docker.io/sonarsource/sonar-scanner-cli:11` | Scanner image. |
 
 The scanner analyzes the build context and sends the commit SHA as the SCM revision.
 

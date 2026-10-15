@@ -42,6 +42,7 @@ func main() {
 	var tlsOpts []func(*tls.Config)
 	var defaultRegistry, agentImage string
 	var allowUnlabeledSecrets bool
+	var insecureRegistries string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -62,6 +63,10 @@ func main() {
 		"Let Koptan resources use Secrets without the koptan.felukka.org/credentials=true label "+
 			"(env KOPTAN_ALLOW_UNLABELED_SECRETS). Insecure: whoever can create a Service can then send any "+
 			"Secret in its namespace to a host of their choice.")
+
+	flag.StringVar(&insecureRegistries, "insecure-registries", os.Getenv("KOPTAN_INSECURE_REGISTRIES"),
+		"Comma-separated registry hosts (host or host:port) builds may pull from and push to over plain "+
+			"HTTP or with an untrusted certificate (env KOPTAN_INSECURE_REGISTRIES).")
 
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
@@ -125,6 +130,10 @@ func main() {
 
 	ciReconciler := controller.NewCIReconciler(mgr.GetClient(), mgr.GetScheme())
 	ciReconciler.Secrets = secrets
+	if ciReconciler.InsecureRegistries, err = controller.ParseInsecureRegistries(insecureRegistries); err != nil {
+		setupLog.Error(err, "invalid --insecure-registries")
+		os.Exit(1)
+	}
 	if err := ciReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CI")
 		os.Exit(1)

@@ -34,6 +34,9 @@ type CIReconciler struct {
 	Scheme *runtime.Scheme
 	// Secrets decides which Secrets a build Pod may use.
 	Secrets SecretPolicy
+	// InsecureRegistries are registry hosts the build may reach over plain
+	// HTTP or with an untrusted certificate (--insecure-registries).
+	InsecureRegistries []string
 }
 
 // NewCIReconciler returns a CIReconciler.
@@ -166,6 +169,7 @@ func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		return ctrl.Result{}, err
 	}
 	pod := buildPod(&ci, svc, sha, image, dockerCfg, steps)
+	allowInsecure(pod, r.InsecureRegistries)
 	if err := r.Secrets.checkPod(ctx, r, pod); err != nil {
 		r.markCIFailed(&ci, "SecretNotAllowed", err.Error())
 		ci.Status.BuildingRevision = sha

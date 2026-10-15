@@ -50,6 +50,10 @@ func TestDiscoverGeneratesDockerfiles(t *testing.T) {
 			Entrypoint: "app.jar"}},
 		{"java-gradle-wrapper", Request{}, languages.Facts{Language: "java", Version: "25",
 			PackageManager: "gradle", Entrypoint: "app.jar"}},
+		{"java-gradle", Request{}, languages.Facts{Language: "java", Version: "25",
+			PackageManager: "gradle", Entrypoint: "app.jar"}},
+		{"node-bun", Request{}, languages.Facts{Language: "node", Version: "22", PackageManager: "bun",
+			Entrypoint: "start script"}},
 		{"dotnet", Request{}, languages.Facts{Language: "dotnet", Version: "9.0", PackageManager: "nuget",
 			Entrypoint: "Shop.Api"}},
 		{"rust", Request{}, languages.Facts{Language: "rust", Version: "1.80", PackageManager: "cargo",
@@ -209,4 +213,36 @@ func mustFS(t *testing.T, dir string) *repofs.FS {
 		t.Fatal(err)
 	}
 	return fs
+}
+
+// buildah enforces short-name resolution and cannot prompt in a Pod, so a
+// generated FROM like "ruby:3.2-slim" fails unless an alias happens to
+// exist. Every base image must name its registry.
+func TestGoldenBaseImagesAreFullyQualified(t *testing.T) {
+	files, err := filepath.Glob("testdata/golden/*.Dockerfile")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no golden files: %v", err)
+	}
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(raw), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 2 || !strings.EqualFold(fields[0], "FROM") {
+				continue
+			}
+			if !hasRegistryHost(fields[1]) {
+				t.Errorf("%s: %q has no registry host (use e.g. docker.io/library/...)", filepath.Base(f), line)
+			}
+		}
+	}
+}
+
+// hasRegistryHost reports whether the image's first path segment is a
+// registry: it contains a dot or a port, or is localhost.
+func hasRegistryHost(image string) bool {
+	host, _, ok := strings.Cut(image, "/")
+	return ok && (strings.ContainsAny(host, ".:") || host == "localhost")
 }

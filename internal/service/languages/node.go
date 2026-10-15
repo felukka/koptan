@@ -63,7 +63,7 @@ func (Node) Detect(fs *repofs.FS) (*Facts, bool) {
 		f.Extra["corepack"] = "true"
 	}
 	if pm.name == bun {
-		f.Extra["image"] = "oven/bun:1"
+		f.Extra["image"] = "docker.io/oven/bun:1"
 	}
 
 	f.Version = nodeVersion(fs, pkg)

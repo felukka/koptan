@@ -146,3 +146,78 @@ func hasEnv(env []corev1.EnvVar, name, value string) bool {
 	}
 	return false
 }
+
+// P-02: CRI-O and buildah enforce short names, so the images Koptan runs
+// name their registry.
+func TestBuildPodImagesAreFullyQualified(t *testing.T) {
+	for _, img := range []string{gitImage, buildahImage} {
+		host, _, ok := strings.Cut(img, "/")
+		if !ok || !strings.ContainsAny(host, ".:") {
+			t.Errorf("%q has no registry host", img)
+		}
+	}
+}
+
+// P-01: only hosts can reach the registries.conf the build writes.
+func TestParseInsecureRegistries(t *testing.T) {
+	got, err := ParseInsecureRegistries(" registry.registry.svc:5000, 10.0.0.5 ,,")
+	if err != nil || strings.Join(got, " ") != "registry.registry.svc:5000 10.0.0.5" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	for _, bad := range []string{"http://reg:5000", "reg:5000/path", "a\"\ninsecure = true", "reg:port", "-reg"} {
+		if _, err := ParseInsecureRegistries(bad); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+}
+
+func TestBuildScriptMarksOnlyListedRegistriesInsecure(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh")
+	}
+	dir := t.TempDir()
+	calls := filepath.Join(dir, "calls")
+	stub := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALLS\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "buildah"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ci := &koptanv1.CI{ObjectMeta: metav1.ObjectMeta{Name: "web-ci", Namespace: "team"},
+		Spec: koptanv1.CISpec{Revision: "0123456789abcdef0123456789abcdef01234567", DockerfileConfigMap: "web-dockerfile"}}
+	pod := buildPod(ci, testService(), ci.Spec.Revision, "registry.registry.svc:5000/web:0123456789ab", "", nil)
+	allowInsecure(pod, []string{"registry.registry.svc:5000", "10.0.0.5"})
+	allowInsecure(pod, nil)
+	build := pod.Spec.Containers[0]
+	if !hasEnv(build.Env, "INSECURE_REGISTRIES", "registry.registry.svc:5000 10.0.0.5") {
+		t.Fatalf("build env = %+v", build.Env)
+	}
+	for _, c := range pod.Spec.InitContainers {
+		for _, e := range c.Env {
+			if e.Name == "INSECURE_REGISTRIES" {
+				t.Errorf("only the build step needs it, %s has it", c.Name)
+			}
+		}
+	}
+
+	confDir := filepath.Join(dir, "registries.conf.d")
+	cmd := exec.Command(sh, "-c", buildScript)
+	cmd.Env = []string{"PATH=" + dir + ":" + os.Getenv("PATH"), "CALLS=" + calls, "REGISTRIES_CONF_DIR=" + confDir,
+		"WORKSPACE=" + dir, "DOCKERFILE_DIR=" + dir, "AUTH_DIR=" + dir, "IMAGE=registry.registry.svc:5000/web:0123456789ab",
+		"INSECURE_REGISTRIES=registry.registry.svc:5000 10.0.0.5"}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build script: %v\n%s", err, out)
+	}
+	conf, err := os.ReadFile(filepath.Join(confDir, "50-koptan-insecure.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "[[registry]]\nlocation = \"registry.registry.svc:5000\"\ninsecure = true\n\n" +
+		"[[registry]]\nlocation = \"10.0.0.5\"\ninsecure = true\n\n"
+	if string(conf) != want {
+		t.Errorf("registries.conf drop-in:\n%s\nwant:\n%s", conf, want)
+	}
+	log, _ := os.ReadFile(calls)
+	if strings.Contains(string(log), "tls-verify") {
+		t.Errorf("TLS must stay on for every other registry:\n%s", log)
+	}
+}

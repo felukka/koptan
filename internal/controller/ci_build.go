@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	koptanv1 "github.com/felukka/koptan/api/v1"
@@ -14,7 +15,7 @@ import (
 )
 
 const (
-	gitImage     = "alpine/git:2.47.2"
+	gitImage     = "docker.io/alpine/git:2.47.2"
 	buildahImage = "quay.io/buildah/stable:v1.43.0"
 
 	workspacePath    = plugins.WorkspacePath
@@ -55,6 +56,15 @@ git -c advice.detachedHead=false checkout -q --detach "$SHA"
 `
 
 const buildScript = `set -eu
+if [ -n "${INSECURE_REGISTRIES:-}" ]; then
+  # Plain-HTTP or self-signed registries the operator admin listed, for
+  # both pulling FROM images and pushing.
+  conf_dir="${REGISTRIES_CONF_DIR:-/etc/containers/registries.conf.d}"
+  mkdir -p "$conf_dir"
+  for r in $INSECURE_REGISTRIES; do
+    printf '[[registry]]\nlocation = "%s"\ninsecure = true\n\n' "$r"
+  done > "$conf_dir/50-koptan-insecure.conf"
+fi
 context="$WORKSPACE/${CONTEXT_DIR:-.}"
 if [ -f "$DOCKERFILE_DIR/.dockerignore" ] && [ ! -e "$context/.dockerignore" ]; then
   cp "$DOCKERFILE_DIR/.dockerignore" "$context/.dockerignore"
@@ -67,6 +77,42 @@ else
   buildah --storage-driver vfs push "$IMAGE"
 fi
 `
+
+// registryHostRe is a registry host with an optional port: what may go
+// into the registries.conf the build writes.
+var registryHostRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$`)
+
+// ParseInsecureRegistries splits the --insecure-registries value
+// ("host[:port],...") and rejects anything that isn't a registry host.
+func ParseInsecureRegistries(list string) ([]string, error) {
+	parts := strings.Split(list, ",")
+	hosts := make([]string, 0, len(parts))
+	for _, h := range parts {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		if !registryHostRe.MatchString(h) {
+			return nil, fmt.Errorf("insecure registry %q: want host or host:port", h)
+		}
+		hosts = append(hosts, h)
+	}
+	return hosts, nil
+}
+
+// allowInsecure lets the build step pull from and push to hosts over plain
+// HTTP or with an untrusted certificate.
+func allowInsecure(pod *corev1.Pod, hosts []string) {
+	if len(hosts) == 0 {
+		return
+	}
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "build-push" {
+			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
+				corev1.EnvVar{Name: "INSECURE_REGISTRIES", Value: strings.Join(hosts, " ")})
+		}
+	}
+}
 
 // imageRef is registry/repo:<first 12 chars of the commit SHA>.
 func imageRef(ci *koptanv1.CI, sha string) string {
