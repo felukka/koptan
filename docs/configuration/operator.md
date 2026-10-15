@@ -43,7 +43,8 @@ These are built in and not configurable:
 | Clone image | `alpine/git:2.47.2` |
 | Build image | `quay.io/buildah/stable:v1.43.0` |
 | SonarQube scanner image (default) | `sonarsource/sonar-scanner-cli:11` |
-| CodeQL image (default) | `debian:bookworm-slim` |
+| CodeQL image (default) | `docker.io/library/python:3.12-slim-bookworm` |
+| CodeQL bundle (default) | `codeql-bundle-v2.27.2` from `github/codeql-action` releases, sha256-checked |
 
 If your cluster cannot reach Docker Hub or Quay, mirror these images and use a registry mirror on your nodes.
 

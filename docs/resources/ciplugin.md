@@ -209,13 +209,17 @@ spec:
 | `codeql.languages` | list of string | The detected language | CodeQL languages: `javascript-typescript` (or `javascript`, `typescript`), `python`, `java-kotlin` (or `java`, `kotlin`), `csharp`, `ruby`, `go`, `c-cpp` (or `cpp`), `swift`. |
 | `codeql.querySuite` | enum | `code-scanning` | `code-scanning`, `security-extended` or `security-and-quality`. |
 | `codeql.failOnSeverity` | enum | `error` | Lowest result level that fails the step: `error`, `warning`, `note`, or `none` (never fail). |
-| `codeql.bundleURL` | `https://` URL | Latest GitHub CodeQL bundle | Use a pinned or mirrored bundle. |
-| `codeql.image` | string | `debian:bookworm-slim` | Image to run in. Must be glibc-based. `go`, `cpp` and `swift` need their toolchain in the image. |
+| `codeql.bundleURL` | `https://` URL | CodeQL bundle `v2.27.2`, checked against its sha256 | Use a mirrored or newer bundle. An overridden bundle is downloaded without a checksum check. |
+| `codeql.image` | string | `docker.io/library/python:3.12-slim-bookworm` | Image to run in. Must be glibc-based, with `apt-get` or with `curl` and `jq` already installed. Python analysis needs `python3`. `go`, `cpp` and `swift` need their toolchain in the image. |
 | `codeql.github.repository` | `owner/name` | — | Upload the SARIF results to this repository's code scanning. |
 | `codeql.github.ref` | `refs/...` | — | Ref the results belong to, such as `refs/heads/main`. |
 | `codeql.github.tokenSecretRef` | `{name, key}` | — | Token with `security_events` scope. |
 
 Detected languages map to CodeQL like this: `go` → `go`, `node` → `javascript-typescript`, `python` → `python`, `java` → `java-kotlin`, `dotnet` → `csharp`, `ruby` → `ruby`. For other stacks, set `languages`.
+
+The step **fails** when it has no language to analyze (no `languages` and a stack CodeQL doesn't support, such as `php`, `rust` or `static`). Detach the plugin from those Services, or set `languages`.
+
+The result count decides the step. The SARIF upload to GitHub runs after it, and a failed upload (for example `Code scanning is not enabled` on a private repository without GitHub Advanced Security) is logged as a warning and doesn't fail the build.
 
 ## Common fields
 

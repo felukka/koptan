@@ -73,6 +73,13 @@ type CISpec struct {
 	// +optional
 	DockerfileConfigMap string `json:"dockerfileConfigMap,omitempty"`
 
+	// Language is the stack discovery detected (go, python, node, ...), as
+	// plugin steps see it in $KOPTAN_LANGUAGE. The Service controller sets
+	// it with the revision, so the first build already has it.
+	// +kubebuilder:validation:MaxLength=63
+	// +optional
+	Language string `json:"language,omitempty"`
+
 	// ContextDir is the build context relative to the repository root.
 	// +kubebuilder:validation:MaxLength=250
 	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`
