@@ -77,10 +77,11 @@ These fields are set by Koptan from the Service.
 | `image.loginSecret` | **Deprecated.** Inline `username` / `password`. Converted into a Secret named `<ci>-registry`. Use `credentialsSecret`. |
 | `revision` | Full commit SHA to build. |
 | `dockerfileConfigMap` | ConfigMap with the `Dockerfile` key and, optionally, `.dockerignore`. |
-| `language` | Detected stack (`go`, `python`, `node`, ...), passed to plugin steps as `$KOPTAN_LANGUAGE`. Set by the Service with the revision. |
 | `contextDir` | Build context relative to the repository root. |
 | `plugins` | CIPlugins to run, each pinned to the plugin's `generation`, so editing a plugin triggers a rebuild. |
 | `extraSteps` | Extra containers. Reserved; not set by Koptan. |
+
+The Service also sets the label `koptan.felukka.org/language` to the detected stack (`go`, `python`, `node`, ...). Plugin steps get it as `$KOPTAN_LANGUAGE`, already on the first build.
 
 ## Deleting
 

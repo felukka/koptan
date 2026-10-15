@@ -190,7 +190,6 @@ func (r *ServiceReconciler) ensureCI(ctx context.Context, svc *koptanv1.Service,
 		ci.Labels[labelLanguage] = target.language
 		ci.Spec.Service.Name = svc.Name
 		ci.Spec.Revision = target.sha
-		ci.Spec.Language = target.language
 		ci.Spec.DockerfileConfigMap = target.dockerfileCM
 		ci.Spec.Plugins = target.plugins
 		ci.Spec.ContextDir = ""

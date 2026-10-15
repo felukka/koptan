@@ -154,7 +154,7 @@ var _ = Describe("CI plugins", func() {
 	})
 
 	// P-10: on a new Service's first build the Service status is not patched
-	// yet; the CI's own spec.language must reach the plugin steps.
+	// yet; the CI's own language label must reach the plugin steps.
 	It("gives plugins the language on the first build, before the Service status has it", func() {
 		Expect(k8sClient.Create(ctx, customPlugin("plg-first", 1, nil))).To(Succeed())
 		svc := &koptanv1.Service{
@@ -174,7 +174,7 @@ var _ = Describe("CI plugins", func() {
 		ci := &koptanv1.CI{}
 		ciKey := types.NamespacedName{Name: name, Namespace: ns}
 		Expect(k8sClient.Get(ctx, ciKey, ci)).To(Succeed())
-		Expect(ci.Spec.Language).To(Equal("python"))
+		Expect(ci.Labels[labelLanguage]).To(Equal("python"))
 		Expect(svc.Status.ServiceType).To(BeEmpty())
 
 		ciR := NewCIReconciler(k8sClient, k8sClient.Scheme())

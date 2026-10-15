@@ -81,8 +81,6 @@ export interface CI {
     image: { registry: string; repo: string; credentialsSecret?: string };
     /** Commit SHA to build. */
     revision?: string;
-    /** Detected stack, as plugin steps see it in KOPTAN_LANGUAGE. */
-    language?: string;
     contextDir?: string;
     /** Resolved plugins, in run order. */
     plugins?: { name: string; generation?: number }[];

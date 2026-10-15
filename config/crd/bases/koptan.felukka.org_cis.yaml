@@ -1619,13 +1619,6 @@ spec:
                 - registry
                 - repo
                 type: object
-              language:
-                description: |-
-                  Language is the stack discovery detected (go, python, node, ...), as
-                  plugin steps see it in $KOPTAN_LANGUAGE. The Service controller sets
-                  it with the revision, so the first build already has it.
-                maxLength: 63
-                type: string
               plugins:
                 description: |-
                   Plugins run, in order, after checkout and before build/push. The
