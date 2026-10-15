@@ -15,7 +15,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -91,10 +90,25 @@ func validateHTTPSRepo(url string) error {
 	return nil
 }
 
+// checkSecrets checks the Secrets the agent gets: the git token and the
+// AI key.
+func (r *SelfServiceReconciler) checkSecrets(ctx context.Context, ss *koptanv1.SelfService) error {
+	refs := []corev1.SecretKeySelector{gitSecretRef(ss)}
+	if k := ss.Spec.AI.APIKeySecretRef; k != nil {
+		refs = append(refs, *k)
+	}
+	for _, ref := range refs {
+		if _, err := r.Secrets.get(ctx, r, ss.Namespace, ref.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *SelfServiceReconciler) secretValue(ctx context.Context, ns string, ref corev1.SecretKeySelector) (string, error) {
-	var secret corev1.Secret
-	if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: ref.Name}, &secret); err != nil {
-		return "", fmt.Errorf("read secret %q: %w", ref.Name, err)
+	secret, err := r.Secrets.get(ctx, r, ns, ref.Name)
+	if err != nil {
+		return "", err
 	}
 	v, ok := secret.Data[ref.Key]
 	if !ok || len(v) == 0 {

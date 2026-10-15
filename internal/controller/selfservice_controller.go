@@ -33,6 +33,8 @@ type SelfServiceReconciler struct {
 	AgentKey string
 	// HTTPClient calls git host APIs; nil means http.DefaultClient.
 	HTTPClient *http.Client
+	// Secrets decides which Secrets the spec may name.
+	Secrets SecretPolicy
 }
 
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=selfservices,verbs=get;list;watch;update;patch
@@ -78,6 +80,9 @@ func (r *SelfServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *SelfServiceReconciler) provision(ctx context.Context, ss *koptanv1.SelfService) (ctrl.Result, error) {
 	if r.AgentKey == "" {
 		return ctrl.Result{}, fmt.Errorf("the operator has no agent key (KOPTAN_AGENT_KEY); SelfServices are disabled")
+	}
+	if err := r.checkSecrets(ctx, ss); err != nil {
+		return ctrl.Result{}, err
 	}
 	repoURL, err := r.ensureRepo(ctx, ss)
 	if err != nil {

@@ -23,9 +23,27 @@ Koptan never takes credentials inline in a resource. Every credential is a refer
 | Git token, AI API key | `SelfService.spec.repo.*`, `spec.ai.apiKeySecretRef` |
 | Agent key | Secret `koptan-agent-key` in the operator namespace |
 
-The UI follows the same rule: tokens you type in a form are written to Secrets owned by the created resource and never returned to the browser.
+### Secrets must opt in
+
+Koptan reads these Secrets with the operator's own permission, and build Pods send them to hosts named in the resource (the repository, the registry, the SonarQube server, a custom plugin's image). So a Secret is only used when it carries the label `koptan.felukka.org/credentials=true`:
+
+```bash
+kubectl -n <namespace> label secret <name> koptan.felukka.org/credentials=true
+```
+
+Without the label, the Service, CI or SelfService fails with `secret "<name>" is not labelled koptan.felukka.org/credentials=true`. This covers `source.secretRef`, `image.credentialsSecret`, plugin tokens, any Secret a `custom` plugin or CI extra step references through `env`/`envFrom`, `secretKeyRef`s in the Service's `env` (they reach your app's Deployment), and the SelfService git and AI Secrets. Alert channel Secrets don't need it.
+
+Label only Secrets meant for Koptan. Anyone who can create a Koptan Service, CI, CIPlugin or SelfService in a namespace can have a labelled Secret sent to a host of their choice, so treat `create` on those resources like `get` on the labelled Secrets.
+
+Git tokens are sent only over `https`. A Service with an `http://` repository and a `secretRef` fails with `refusing to send credentials ... over plain http`.
+
+Upgrading an existing install: label the Secrets your resources use. The manager flag `--allow-unlabeled-secrets` (Helm `allowUnlabeledSecrets: true`) restores the old behaviour, which lets anyone who can create a Service read every Secret in its namespace. Use it only while you migrate.
+
+The UI follows the same rule: tokens you type in a form are written to labelled Secrets owned by the created resource and never returned to the browser.
 
 In build Pods, the git token is only given to the clone step, and registry credentials only to the build step.
+
+The clone step sends the git token as a one-off request header and never writes it to `.git/config`, so plugin steps and the image build can't read it from the workspace. The workspace still contains `.git` (scanners such as SonarQube use it). If your repository brings its own Dockerfile and copies the whole context (`COPY . .`), add a `.dockerignore` containing `.git` so the history doesn't end up in the image. Generated Dockerfiles already come with one.
 
 ## Builds
 

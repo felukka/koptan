@@ -47,6 +47,8 @@ type ServiceReconciler struct {
 	DefaultRegistry string
 	// Engine discovers languages; nil means service.NewEngine().
 	Engine *service.Engine
+	// Secrets decides which Secrets spec.source.secretRef may name.
+	Secrets SecretPolicy
 }
 
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=services,verbs=get;list;watch;create;update;patch;delete

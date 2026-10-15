@@ -33,6 +33,8 @@ const (
 type CDReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// Secrets decides which Secrets the app's env may reference.
+	Secrets SecretPolicy
 }
 
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cds,verbs=get;list;watch;create;update;patch;delete
@@ -41,6 +43,7 @@ type CDReconciler struct {
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile implements the CD reconciliation loop.
 // Reconcile deploys the CI's latest image. It runs on every change (CD
@@ -87,7 +90,14 @@ func (r *CDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		return ctrl.Result{}, r.patchStatus(ctx, orig, &cd)
 	}
 
-	deploy, err := r.reconcileDeployment(ctx, &cd, image)
+	// spec.env comes from the Service and runs in an image built from the
+	// Service's repo, so a secretKeyRef there is held to the same policy.
+	podSpec := appPodSpec(&cd, image)
+	if err := r.Secrets.checkPodSpec(ctx, r, cd.Namespace, &podSpec); err != nil {
+		setCDCondition(&cd, koptanv1.CDPhaseFailed, metav1.ConditionFalse, "SecretNotAllowed", err.Error())
+		return ctrl.Result{}, r.patchStatus(ctx, orig, &cd)
+	}
+	deploy, err := r.reconcileDeployment(ctx, &cd, podSpec)
 	if apierrors.IsConflict(err) {
 		// Someone (often the Deployment controller) updated it meanwhile;
 		// retry with a fresh copy instead of reporting a failure.
@@ -145,22 +155,12 @@ func deployFailed(d *appsv1.Deployment) bool {
 	return false
 }
 
-// reconcileDeployment creates or updates the Deployment and returns it with
-// its current status.
-func (r *CDReconciler) reconcileDeployment(ctx context.Context, cd *koptanv1.CD, image string) (*appsv1.Deployment, error) {
-	replicas := cd.Spec.Replicas
-	if replicas < 0 {
-		replicas = 1
-	}
+// appPodSpec is the pod spec of the app Deployment.
+func appPodSpec(cd *koptanv1.CD, image string) corev1.PodSpec {
 	port := cd.Spec.Port
 	if port == 0 {
 		port = defaultPort
 	}
-	labels := map[string]string{
-		"koptan.felukka.org/cd":        cd.Name,
-		"koptan.felukka.org/component": "app",
-	}
-
 	env := []corev1.EnvVar{
 		{Name: "CONTAINER_IMAGE", Value: image},
 		{Name: "PORT", Value: fmt.Sprint(port)},
@@ -199,7 +199,20 @@ func (r *CDReconciler) reconcileDeployment(ctx context.Context, cd *koptanv1.CD,
 	if cd.Spec.ImagePullSecret != "" {
 		podSpec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: cd.Spec.ImagePullSecret}}
 	}
+	return podSpec
+}
 
+// reconcileDeployment creates or updates the Deployment and returns it with
+// its current status.
+func (r *CDReconciler) reconcileDeployment(ctx context.Context, cd *koptanv1.CD, podSpec corev1.PodSpec) (*appsv1.Deployment, error) {
+	replicas := cd.Spec.Replicas
+	if replicas < 0 {
+		replicas = 1
+	}
+	labels := map[string]string{
+		"koptan.felukka.org/cd":        cd.Name,
+		"koptan.felukka.org/component": "app",
+	}
 	deploy := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: cd.Name, Namespace: cd.Namespace}}
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, deploy, func() error {
 		deploy.Labels = labels

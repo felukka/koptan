@@ -26,7 +26,10 @@ kubectl create secret docker-registry my-registry \
   --docker-username=<user> \
   --docker-password=<token> \
   -n <your-namespace>
+kubectl label secret my-registry koptan.felukka.org/credentials=true -n <your-namespace>
 ```
+
+Koptan only uses Secrets labelled `koptan.felukka.org/credentials=true`; see [Security](../configuration/security.md#secrets-must-opt-in).
 
 !!! note
     A registry that accepts anonymous pushes, such as a test registry inside the cluster, needs no Secret.
@@ -38,9 +41,10 @@ kubectl create secret docker-registry my-registry \
 
   ```bash
   kubectl create secret generic my-repo-token --from-literal=token=<token> -n <your-namespace>
+  kubectl label secret my-repo-token koptan.felukka.org/credentials=true -n <your-namespace>
   ```
 
-Koptan accepts `https`, `http`, `ssh` and `git` repository URLs for Services. SelfService repositories must use `https`.
+Koptan accepts `https`, `http`, `ssh` and `git` repository URLs for Services, but sends a token only over `https`. SelfService repositories must use `https`.
 
 ## Optional components
 

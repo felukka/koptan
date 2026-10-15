@@ -41,6 +41,7 @@ func main() {
 	var webhookCertPath, webhookCertName, webhookCertKey string
 	var tlsOpts []func(*tls.Config)
 	var defaultRegistry, agentImage string
+	var allowUnlabeledSecrets bool
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -57,6 +58,10 @@ func main() {
 		"Registry used when a Service sets no spec.image.registry (env KOPTAN_DEFAULT_REGISTRY).")
 	flag.StringVar(&agentImage, "agent-image", envOr("KOPTAN_AGENT_IMAGE", "ghcr.io/felukka/koptan-agent:latest"),
 		"Image of the SelfService agent session (env KOPTAN_AGENT_IMAGE). The agent key comes from KOPTAN_AGENT_KEY.")
+	flag.BoolVar(&allowUnlabeledSecrets, "allow-unlabeled-secrets", os.Getenv("KOPTAN_ALLOW_UNLABELED_SECRETS") == "true",
+		"Let Koptan resources use Secrets without the koptan.felukka.org/credentials=true label "+
+			"(env KOPTAN_ALLOW_UNLABELED_SECRETS). Insecure: whoever can create a Service can then send any "+
+			"Secret in its namespace to a host of their choice.")
 
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
@@ -103,23 +108,32 @@ func main() {
 		os.Exit(1)
 	}
 
+	secrets := controller.SecretPolicy{AllowUnlabeled: allowUnlabeledSecrets}
+	if allowUnlabeledSecrets {
+		setupLog.Info("WARNING: --allow-unlabeled-secrets is set; Koptan resources may use any Secret in their namespace")
+	}
+
 	if err := (&controller.ServiceReconciler{
 		Client:          mgr.GetClient(),
 		Scheme:          mgr.GetScheme(),
 		DefaultRegistry: defaultRegistry,
+		Secrets:         secrets,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")
 		os.Exit(1)
 	}
 
-	if err := controller.NewCIReconciler(mgr.GetClient(), mgr.GetScheme()).SetupWithManager(mgr); err != nil {
+	ciReconciler := controller.NewCIReconciler(mgr.GetClient(), mgr.GetScheme())
+	ciReconciler.Secrets = secrets
+	if err := ciReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CI")
 		os.Exit(1)
 	}
 
 	if err := (&controller.CDReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Secrets: secrets,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CD")
 		os.Exit(1)
@@ -146,6 +160,7 @@ func main() {
 		Scheme:     mgr.GetScheme(),
 		AgentImage: agentImage,
 		AgentKey:   os.Getenv("KOPTAN_AGENT_KEY"),
+		Secrets:    secrets,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SelfService")
 		os.Exit(1)
