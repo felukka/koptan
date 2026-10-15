@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-const sonarScannerImage = "sonarsource/sonar-scanner-cli:11"
+const sonarScannerImage = "docker.io/sonarsource/sonar-scanner-cli:11"
 
 // SonarQube runs sonar-scanner on the source and, by default, waits for
 // the project's quality gate so a failing gate fails the build.

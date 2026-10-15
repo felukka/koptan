@@ -8,7 +8,7 @@ RUN {{.BuildCmd}} \
         ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*' | head -n1)" \
     && test -n "$jar" && cp "$jar" /app.jar
 
-FROM eclipse-temurin:{{.Version}}-jre
+FROM docker.io/library/eclipse-temurin:{{.Version}}-jre
 WORKDIR /app
 COPY --from=build /app.jar /app/app.jar
 ENV PORT={{.Port}} JAVA_OPTS=""

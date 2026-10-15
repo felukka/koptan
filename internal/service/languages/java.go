@@ -39,10 +39,10 @@ func (Java) Detect(fs *repofs.FS) (*Facts, bool) {
 	case fs.Exists("pom.xml"):
 		f.PackageManager = "maven"
 		f.Version = javaVersion(fs.ReadString("pom.xml"), javaPomVersionRes)
-		f.Extra["builderImage"] = "maven:3.9-eclipse-temurin-" + f.Version
+		f.Extra["builderImage"] = "docker.io/library/maven:3.9-eclipse-temurin-" + f.Version
 		f.BuildCmd = "mvn -B -q package -DskipTests"
 		if fs.Exists("mvnw") {
-			f.Extra["builderImage"] = "eclipse-temurin:" + f.Version + "-jdk"
+			f.Extra["builderImage"] = "docker.io/library/eclipse-temurin:" + f.Version + "-jdk"
 			f.BuildCmd = "chmod +x mvnw && ./mvnw -B -q package -DskipTests"
 		}
 		f.Extra["outputDir"] = "target"
@@ -50,10 +50,10 @@ func (Java) Detect(fs *repofs.FS) (*Facts, bool) {
 		f.PackageManager = "gradle"
 		script := fs.ReadString("build.gradle") + fs.ReadString("build.gradle.kts")
 		f.Version = javaVersion(script, javaGradleVersionRes)
-		f.Extra["builderImage"] = "gradle:8-jdk" + f.Version
+		f.Extra["builderImage"] = "docker.io/library/gradle:8-jdk" + f.Version
 		f.BuildCmd = "gradle --no-daemon -q build -x test"
 		if fs.Exists("gradlew") {
-			f.Extra["builderImage"] = "eclipse-temurin:" + f.Version + "-jdk"
+			f.Extra["builderImage"] = "docker.io/library/eclipse-temurin:" + f.Version + "-jdk"
 			f.BuildCmd = "chmod +x gradlew && ./gradlew --no-daemon -q build -x test"
 		}
 		f.Extra["outputDir"] = "build/libs"

@@ -229,3 +229,11 @@ func hasSecretEnv(env []corev1.EnvVar, name, secret string) bool {
 	}
 	return false
 }
+
+// CRI-O enforces short names for Pod images: the default scanner image
+// names its registry.
+func TestSonarQubeImageIsFullyQualified(t *testing.T) {
+	if !strings.HasPrefix(sonarScannerImage, "docker.io/") {
+		t.Errorf("sonarScannerImage = %q", sonarScannerImage)
+	}
+}
