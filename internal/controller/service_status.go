@@ -68,10 +68,11 @@ func retryWait(svc *koptanv1.Service) time.Duration {
 	return time.Until(c.LastTransitionTime.Add(failedRetryInterval))
 }
 
-// patchStatus writes status changes as a merge patch, so concurrent spec or
-// metadata updates do not make the write fail.
+// patchStatus writes status changes as a merge patch with an optimistic
+// lock: a reconcile that started from a stale copy conflicts and is
+// requeued instead of overwriting newer status.
 func (r *ServiceReconciler) patchStatus(ctx context.Context, orig, svc *koptanv1.Service) error {
-	return r.Status().Patch(ctx, svc, client.MergeFrom(orig))
+	return r.Status().Patch(ctx, svc, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
 
 // setPhase sets the phase and message on the Service status.

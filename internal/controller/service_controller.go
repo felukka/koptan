@@ -12,6 +12,7 @@ import (
 	koptanv1 "github.com/felukka/koptan/api/v1"
 	"github.com/felukka/koptan/internal/service"
 	"github.com/felukka/koptan/internal/utils"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -61,12 +62,22 @@ type ServiceReconciler struct {
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile implements the Service reconciliation loop.
-// Lifecycle: Pending -> Discovering -> Ready (CI created). On Ready it polls
-// git and moves the CI to new commits; spec changes trigger a new discovery.
-// Any update to the Service, such as the koptan.felukka.org/refresh
-// annotation the Backstage backend sets after a SelfService push, triggers
-// a reconcile and so an immediate poll.
+// Lifecycle: Pending -> Discovering -> Building (CI builds, CD rolls out) ->
+// Ready (the CD runs the latest revision), or Failed. Once discovered it
+// polls git and moves the CI to new commits; spec changes trigger a new
+// discovery. Any update to the Service, such as the
+// koptan.felukka.org/refresh annotation the Backstage backend sets after a
+// SelfService push, triggers a reconcile and so an immediate poll.
 func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	res, err := r.reconcile(ctx, req)
+	if apierrors.IsConflict(err) {
+		// A status write raced another write: start over from fresh state.
+		return ctrl.Result{Requeue: true}, nil
+	}
+	return res, err
+}
+
+func (r *ServiceReconciler) reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	var svc koptanv1.Service
@@ -105,7 +116,8 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// A failed Service retries transient errors after a pause, not in a loop.
-	if svc.Status.Phase == koptanv1.ServicePhaseFailed && !specChanged {
+	// A CI or CD failure is not the Service's to retry: keep following them.
+	if svc.Status.Phase == koptanv1.ServicePhaseFailed && !pipelineFailure(&svc) && !specChanged {
 		if wait := retryWait(&svc); wait > 0 {
 			return ctrl.Result{RequeueAfter: wait}, nil
 		}
@@ -124,7 +136,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	var rev *utils.Revision
-	if specChanged || svc.Status.Phase != koptanv1.ServicePhaseReady {
+	if specChanged || !discovered(&svc) {
 		rev, err = utils.ResolveRevision(ctx, svc.Spec.Source.Repo, svc.Spec.Source.Revision, token)
 		if err != nil {
 			r.markFailed(&svc, "RevisionUnresolved", fmt.Sprintf("resolve revision: %v", err))
@@ -143,12 +155,16 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 			return res, err
 		}
-	}
-
-	if err := r.syncPlugins(ctx, &svc, pluginRefs); err != nil {
+	} else if err := r.ensureOwnCI(ctx, &svc, pluginRefs); apierrors.IsConflict(err) || apierrors.IsAlreadyExists(err) {
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	} else if err != nil {
 		return ctrl.Result{}, err
 	}
+
 	if err := r.syncCD(ctx, &svc); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.setPipelinePhase(ctx, &svc); err != nil {
 		return ctrl.Result{}, err
 	}
 	if err := r.patchStatus(ctx, orig, &svc); err != nil {

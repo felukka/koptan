@@ -58,7 +58,8 @@ kubectl -n <ns> annotate ksvc <name> koptan.felukka.org/refresh="$(date +%s)" --
 | Failing in `plugin-<name>` | The plugin found a problem (that is its job), or it is misconfigured. | Read `kubectl logs <pod> -c plugin-<name>`. Use `failurePolicy: Ignore` to report without blocking. |
 | Failing in `build-push` during `RUN` steps | The application does not build (missing dependency, failing compile). | Build locally with the same Dockerfile: `kubectl get cm <svc>-dockerfile-... -o jsonpath='{.data.Dockerfile}' > Dockerfile`. |
 | `unauthorized` / `denied` on push | Wrong or missing registry credentials, or the repository does not allow pushes. | Check `image.credentialsSecret`, the registry host and `image.repo`. On GHCR the token needs `write:packages`. |
-| Build Pod `Pending` | Not enough CPU or memory in the namespace, or a ResourceQuota. | `kubectl describe pod <pod>`. |
+| Build Pod `Pending` | Not enough CPU or memory on the nodes. | `kubectl describe pod <pod>`. |
+| `create build pod: ... exceeded quota` | The namespace's ResourceQuota has no room for the build Pod. | Raise the quota or free room. Koptan tries again every minute. |
 | Build Pod `OOMKilled` | Large builds (Java, Rust, Node) need memory. | Give the namespace more room; for plugins, raise `resources`. |
 
 ## CD is `Failed` or stuck in `Deploying`
@@ -77,7 +78,7 @@ kubectl -n <ns> logs deployment/<name>-cd
 
 ## No new builds after a push
 
-- The Service must be `Ready` for polling. A `Failed` Service retries every minute.
+- Polling runs once discovery is done, also while the CI or CD is `Failed`. A Service that failed on its own (source, secret, revision, discovery) retries every minute.
 - `revision` set to a tag or SHA pins the Service. Use a branch to follow new commits.
 - Polling runs every minute. Use the refresh annotation to check at once.
 - The CI builds a commit only once. To rebuild the same commit, change something in the CI's inputs (for example, edit an attached plugin) or push a new commit.

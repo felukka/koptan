@@ -7,8 +7,6 @@ import (
 
 	koptanv1 "github.com/felukka/koptan/api/v1"
 	"github.com/felukka/koptan/internal/plugins"
-	"k8s.io/apimachinery/pkg/api/equality"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,27 +30,6 @@ func (r *ServiceReconciler) resolvePlugins(ctx context.Context, svc *koptanv1.Se
 		}
 	}
 	return plugins.Refs(attached), nil
-}
-
-// syncPlugins points the existing CI at the resolved plugins; a change
-// bumps the CI generation, which rebuilds the current revision.
-func (r *ServiceReconciler) syncPlugins(ctx context.Context, svc *koptanv1.Service, refs []koptanv1.CIPluginRef) error {
-	if svc.Status.CIRef == "" {
-		return nil
-	}
-	var ci koptanv1.CI
-	if err := r.Get(ctx, types.NamespacedName{Name: svc.Status.CIRef, Namespace: svc.Namespace}, &ci); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-	if equality.Semantic.DeepEqual(ci.Spec.Plugins, refs) {
-		return nil
-	}
-	patch := client.MergeFrom(ci.DeepCopy())
-	ci.Spec.Plugins = refs
-	if err := r.Patch(ctx, &ci, patch); err != nil && !apierrors.IsNotFound(err) {
-		return err
-	}
-	return nil
 }
 
 // servicesForPlugin enqueues every Service in the plugin's namespace: a
