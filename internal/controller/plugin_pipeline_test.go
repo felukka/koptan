@@ -52,6 +52,8 @@ var _ = Describe("CI plugins", func() {
 		Expect(k8sClient.Create(ctx, svc)).To(Succeed())
 		svc.Status.CIRef = "plg-ci"
 		svc.Status.ServiceType = "go"
+		svc.Status.LatestRevision = sha
+		svc.Status.DockerfileConfigMap = "plg-dockerfile"
 		Expect(k8sClient.Status().Update(ctx, svc)).To(Succeed())
 
 		ci := &koptanv1.CI{
@@ -72,7 +74,7 @@ var _ = Describe("CI plugins", func() {
 		Expect(refs).To(HaveLen(2))
 		Expect(refs[0].Name).To(Equal("plg-scan"))
 		Expect(refs[1].Name).To(Equal("plg-lint"))
-		Expect(sr.syncPlugins(ctx, svc, refs)).To(Succeed())
+		Expect(sr.ensureOwnCI(ctx, svc, refs)).To(Succeed())
 
 		ciR := NewCIReconciler(k8sClient, k8sClient.Scheme())
 		ciReq := reconcile.Request{NamespacedName: types.NamespacedName{Name: "plg-ci", Namespace: ns}}
@@ -121,7 +123,7 @@ var _ = Describe("CI plugins", func() {
 		Expect(k8sClient.Update(ctx, &lint)).To(Succeed())
 		refs, err = sr.resolvePlugins(ctx, svc)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(sr.syncPlugins(ctx, svc, refs)).To(Succeed())
+		Expect(sr.ensureOwnCI(ctx, svc, refs)).To(Succeed())
 		_, err = ciR.Reconcile(ctx, ciReq)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient.Get(ctx, ciReq.NamespacedName, ci)).To(Succeed())

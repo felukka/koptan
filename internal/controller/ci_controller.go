@@ -34,11 +34,15 @@ type CIReconciler struct {
 	Scheme *runtime.Scheme
 	// Secrets decides which Secrets a build Pod may use.
 	Secrets SecretPolicy
+	// APIReader reads around the informer cache, to tell a build Pod that
+	// is really gone from one the cache has not seen yet. Defaults to the
+	// client.
+	APIReader client.Reader
 }
 
 // NewCIReconciler returns a CIReconciler.
 func NewCIReconciler(c client.Client, s *runtime.Scheme) *CIReconciler {
-	return &CIReconciler{Client: c, Scheme: s}
+	return &CIReconciler{Client: c, Scheme: s, APIReader: c}
 }
 
 // +kubebuilder:rbac:groups=koptan.felukka.org,resources=cis,verbs=get;list;watch;create;update;patch;delete
@@ -53,6 +57,15 @@ func NewCIReconciler(c client.Client, s *runtime.Scheme) *CIReconciler {
 // Reconcile builds spec.revision once per revision and spec generation.
 // A failed build is not retried until the revision or the spec changes.
 func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	res, err := r.reconcile(ctx, req)
+	if apierrors.IsConflict(err) {
+		// The status write was based on a stale copy (see patchStatus).
+		return ctrl.Result{Requeue: true}, nil
+	}
+	return res, err
+}
+
+func (r *CIReconciler) reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	var ci koptanv1.CI
@@ -97,45 +110,7 @@ func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 
 	// --- A build for this revision and spec is known: follow it. ---
 	if current && ci.Status.BuildPod != "" && ci.Status.Phase == koptanv1.CIPhaseBuilding {
-		var pod corev1.Pod
-		err := r.Get(ctx, types.NamespacedName{Name: ci.Status.BuildPod, Namespace: ci.Namespace}, &pod)
-		if apierrors.IsNotFound(err) {
-			r.markCIFailed(&ci, "BuildPodLost", fmt.Sprintf("build pod %s disappeared", ci.Status.BuildPod))
-			return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
-		}
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		phase, msg, done := podResult(&pod)
-		ci.Status.PluginResults = pluginResults(&ci, &pod)
-		if !done {
-			setCIPhase(&ci, koptanv1.CIPhaseBuilding, msg)
-			return ctrl.Result{RequeueAfter: buildPollInterval}, r.patchStatus(ctx, orig, &ci)
-		}
-		if phase == koptanv1.CIPhaseFailed {
-			log.Info("build failed", "pod", pod.Name, "reason", msg)
-			r.markCIFailed(&ci, "BuildFailed", msg)
-			return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
-		}
-		log.Info("build succeeded", "image", image)
-		now := metav1.Now()
-		ci.Status.Phase = koptanv1.CIPhaseSucceeded
-		ci.Status.Image = image
-		ci.Status.Revision = sha
-		ci.Status.BuildTime = &now
-		ci.Status.BuildCount++
-		ci.Status.Message = "build succeeded"
-		meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
-			Type: "BuildSucceeded", Status: metav1.ConditionTrue, Reason: "BuildCompleted",
-			Message: fmt.Sprintf("Image %s", image),
-		})
-		meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
-			Type: "Ready", Status: metav1.ConditionTrue, Reason: "Succeeded", Message: "build succeeded",
-		})
-		if err := r.patchStatus(ctx, orig, &ci); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, r.ensureCD(ctx, &ci, svc)
+		return r.followBuild(ctx, orig, &ci, svc, sha, image)
 	}
 
 	// --- Up to date, or failed for this exact revision and spec: nothing to build. ---
@@ -176,7 +151,16 @@ func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		return ctrl.Result{}, err
 	}
 	if err := r.Create(ctx, pod); err != nil {
-		return ctrl.Result{}, fmt.Errorf("create build pod: %w", err)
+		// Show why (e.g. "exceeded quota") instead of only logging it, and
+		// leave the revision and generation unobserved so the build is
+		// tried again once whatever blocked it is fixed.
+		gen := ci.Status.ObservedGeneration
+		r.markCIFailed(&ci, "PodCreateFailed", fmt.Sprintf("create build pod: %v", err))
+		ci.Status.ObservedGeneration = gen
+		if perr := r.patchStatus(ctx, orig, &ci); perr != nil {
+			return ctrl.Result{}, perr
+		}
+		return ctrl.Result{RequeueAfter: failedRetryInterval}, nil
 	}
 	log.Info("starting build", "service", svc.Name, "image", image, "pod", pod.Name)
 	ci.Status.BuildPod = pod.Name
@@ -185,6 +169,54 @@ func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	ci.Status.ObservedGeneration = ci.Generation
 	setCIPhase(&ci, koptanv1.CIPhaseBuilding, fmt.Sprintf("Building %s in pod %s", image, pod.Name))
 	return ctrl.Result{RequeueAfter: buildPollInterval}, r.patchStatus(ctx, orig, &ci)
+}
+
+// followBuild tracks the running build Pod and records its outcome; on
+// success it creates or updates the CD.
+func (r *CIReconciler) followBuild(ctx context.Context, orig, ci *koptanv1.CI, svc *koptanv1.Service,
+	sha, image string) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+	pod, lost, err := r.buildPodOf(ctx, ci)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if lost {
+		r.markCIFailed(ci, "BuildPodLost", fmt.Sprintf("build pod %s disappeared", ci.Status.BuildPod))
+		return ctrl.Result{}, r.patchStatus(ctx, orig, ci)
+	}
+	if pod == nil { // this reconcile saw a stale CI; a fresh one follows
+		return ctrl.Result{Requeue: true}, nil
+	}
+	phase, msg, done := podResult(pod)
+	ci.Status.PluginResults = pluginResults(ci, pod)
+	if !done {
+		setCIPhase(ci, koptanv1.CIPhaseBuilding, msg)
+		return ctrl.Result{RequeueAfter: buildPollInterval}, r.patchStatus(ctx, orig, ci)
+	}
+	if phase == koptanv1.CIPhaseFailed {
+		log.Info("build failed", "pod", pod.Name, "reason", msg)
+		r.markCIFailed(ci, "BuildFailed", msg)
+		return ctrl.Result{}, r.patchStatus(ctx, orig, ci)
+	}
+	log.Info("build succeeded", "image", image)
+	now := metav1.Now()
+	ci.Status.Phase = koptanv1.CIPhaseSucceeded
+	ci.Status.Image = image
+	ci.Status.Revision = sha
+	ci.Status.BuildTime = &now
+	ci.Status.BuildCount++
+	ci.Status.Message = "build succeeded"
+	meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
+		Type: "BuildSucceeded", Status: metav1.ConditionTrue, Reason: "BuildCompleted",
+		Message: fmt.Sprintf("Image %s", image),
+	})
+	meta.SetStatusCondition(&ci.Status.Conditions, metav1.Condition{
+		Type: "Ready", Status: metav1.ConditionTrue, Reason: "Succeeded", Message: "build succeeded",
+	})
+	if err := r.patchStatus(ctx, orig, ci); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, r.ensureCD(ctx, ci, svc)
 }
 
 func validateBuild(ci *koptanv1.CI, svc *koptanv1.Service) error {
@@ -278,8 +310,40 @@ func (r *CIReconciler) ensureCD(ctx context.Context, ci *koptanv1.CI, svc *kopta
 	return err
 }
 
+// buildPodOf returns the Pod status.buildPod names. The cache can lag
+// behind: right after a new build starts, a reconcile may still see the
+// previous Pod name, already deleted, or a new Pod not cached yet. So a
+// cache miss is checked against the API server: lost is true only when
+// the Pod is really gone and the CI still names it. A nil Pod without
+// lost means this reconcile's CI is stale.
+func (r *CIReconciler) buildPodOf(ctx context.Context, ci *koptanv1.CI) (*corev1.Pod, bool, error) {
+	key := types.NamespacedName{Name: ci.Status.BuildPod, Namespace: ci.Namespace}
+	var pod corev1.Pod
+	err := r.Get(ctx, key, &pod)
+	if err == nil || !apierrors.IsNotFound(err) {
+		return &pod, false, err
+	}
+	reader := r.APIReader
+	if reader == nil {
+		reader = r.Client
+	}
+	if err := reader.Get(ctx, key, &pod); err == nil {
+		return &pod, false, nil
+	} else if !apierrors.IsNotFound(err) {
+		return nil, false, err
+	}
+	var fresh koptanv1.CI
+	if err := reader.Get(ctx, client.ObjectKeyFromObject(ci), &fresh); err != nil {
+		return nil, false, client.IgnoreNotFound(err)
+	}
+	return nil, fresh.Status.BuildPod == ci.Status.BuildPod, nil
+}
+
+// patchStatus writes status changes as a merge patch with an optimistic
+// lock: a reconcile that started from a stale copy conflicts and is
+// requeued instead of writing over newer status (such as a newer build Pod).
 func (r *CIReconciler) patchStatus(ctx context.Context, orig, ci *koptanv1.CI) error {
-	return r.Status().Patch(ctx, ci, client.MergeFrom(orig))
+	return r.Status().Patch(ctx, ci, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
 
 func setCIPhase(ci *koptanv1.CI, phase koptanv1.CIPhase, message string) {

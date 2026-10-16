@@ -66,12 +66,9 @@ func (r *ServiceReconciler) discoverAndBuild(ctx context.Context, svc *koptanv1.
 	svc.Status.CIRef = ciName
 	svc.Status.ObservedGeneration = svc.Generation
 	svc.Status.Error = ""
-	setPhase(svc, koptanv1.ServicePhaseReady,
+	// The caller derives the final phase from the CI and CD.
+	setPhase(svc, koptanv1.ServicePhaseBuilding,
 		fmt.Sprintf("CI %s building %s", ciName, short(rev.SHA)))
-	meta.SetStatusCondition(&svc.Status.Conditions, metav1.Condition{
-		Type: "Ready", Status: metav1.ConditionTrue, Reason: "Discovered",
-		Message: svc.Status.Message,
-	})
 	return ctrl.Result{}, nil
 }
 

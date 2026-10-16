@@ -70,7 +70,9 @@ It builds the default branch, pushes to `<default-registry>/hello`, and runs one
 4. **Store.** Koptan saves the Dockerfile, and a default `.dockerignore`, in a ConfigMap named `<name>-dockerfile-<hash>`.
 5. **Build.** Koptan creates or updates the CI `<name>-ci` with the commit and the attached [CIPlugins](ciplugin.md). The CI builds and pushes the image.
 6. **Deploy.** When the build succeeds, the CI creates the CD `<name>-cd`, which deploys the image.
-7. **Watch.** Once the Service is `Ready`, Koptan checks the repository **every minute**. A new commit starts again at step 3.
+7. **Watch.** Once discovery is done, Koptan checks the repository **every minute**, whatever the CI or CD is doing. A new commit starts again at step 3.
+
+The Service's `phase` follows the whole pipeline: `Building` while the CI builds or the CD rolls out, `Ready` only once the CD runs the latest commit, and `Failed` with the CI's or CD's message when either fails. The Service also keeps its CI in line with its spec: a hand edit to the CI's revision, Dockerfile, context directory or plugins (and its registry, when the Service sets `spec.image`) is reverted, and a deleted CI is recreated.
 
 Changing the Service's spec also starts the cycle again. Changes to `replicas` and `env` go straight to the CD and roll out without a rebuild. A change to `port` with a generated Dockerfile also rebuilds the image, because the port is written into the Dockerfile.
 
@@ -190,7 +192,7 @@ Add `-o wide` to also see `LASTPUSH`.
 
 | Field | Description |
 |---|---|
-| `phase` | `Pending`, `Discovering`, `Building`, `Ready` or `Failed`. |
+| `phase` | `Pending`, `Discovering`, `Building` (CI building or CD rolling out), `Ready` (the CD runs `latestRevision`) or `Failed` (the Service, its CI or its CD; see `message`). |
 | `serviceType` | The detected language, or `dockerfile` when your own Dockerfile was used. |
 | `latestRevision` | SHA of the last processed commit. |
 | `lastPushDetected` | When Koptan last saw a new commit. |

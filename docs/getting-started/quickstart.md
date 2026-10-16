@@ -71,9 +71,9 @@ The Service moves through these phases:
 |---|---|
 | `Pending` | Accepted, not processed yet. |
 | `Discovering` | Cloning the repository and finding or generating the Dockerfile. |
-| `Building` | The CI `hello-ci` is building the image. |
-| `Ready` | The build succeeded. The CD `hello-cd` deploys it. |
-| `Failed` | See `kubectl -n demo describe ksvc hello` and [Troubleshooting](../reference/troubleshooting.md). |
+| `Building` | The CI `hello-ci` is building the image, or the CD `hello-cd` is rolling it out. |
+| `Ready` | The app runs the latest commit. |
+| `Failed` | The Service, its CI or its CD failed. `status.message` says which and why (for example `CI hello-ci failed: ...`). See [Troubleshooting](../reference/troubleshooting.md). |
 
 To follow the build itself:
 

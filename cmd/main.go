@@ -125,6 +125,7 @@ func main() {
 
 	ciReconciler := controller.NewCIReconciler(mgr.GetClient(), mgr.GetScheme())
 	ciReconciler.Secrets = secrets
+	ciReconciler.APIReader = mgr.GetAPIReader()
 	if err := ciReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CI")
 		os.Exit(1)
