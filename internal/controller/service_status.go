@@ -7,10 +7,8 @@ import (
 
 	koptanv1 "github.com/felukka/koptan/api/v1"
 	"github.com/felukka/koptan/internal/utils"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -20,9 +18,9 @@ func (r *ServiceReconciler) gitToken(ctx context.Context, svc *koptanv1.Service)
 	if ref == nil {
 		return "", nil
 	}
-	var secret corev1.Secret
-	if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: svc.Namespace}, &secret); err != nil {
-		return "", fmt.Errorf("read git token secret %q: %w", ref.Name, err)
+	secret, err := r.Secrets.get(ctx, r, svc.Namespace, ref.Name)
+	if err != nil {
+		return "", fmt.Errorf("git token: %w", err)
 	}
 	key := ref.Key
 	if key == "" {

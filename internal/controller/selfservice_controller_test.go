@@ -49,6 +49,8 @@ var _ = Describe("SelfService", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, ss)).To(Succeed())
+		createCredentialSecret("shop-git")
+		createCredentialSecret("shop-ai")
 		r := &SelfServiceReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), AgentImage: "agent:test", AgentKey: key}
 		reconcileTwice(r, "shop")
 
@@ -102,8 +104,7 @@ var _ = Describe("SelfService", func() {
 		gh := httptest.NewServer(mux)
 		defer gh.Close()
 
-		Expect(k8sClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "gh-token", Namespace: ns},
-			StringData: map[string]string{"token": "ghp_x"}})).To(Succeed())
+		createCredentialSecret("gh-token")
 		Expect(k8sClient.Create(ctx, &koptanv1.SelfService{
 			ObjectMeta: metav1.ObjectMeta{Name: "new-app", Namespace: ns},
 			Spec: koptanv1.SelfServiceSpec{
@@ -124,6 +125,7 @@ var _ = Describe("SelfService", func() {
 	})
 
 	It("fails clearly without an agent key or on a name clash", func() {
+		createCredentialSecret("t")
 		Expect(k8sClient.Create(ctx, &koptanv1.Service{ObjectMeta: metav1.ObjectMeta{Name: "taken", Namespace: ns},
 			Spec: koptanv1.ServiceSpec{Source: koptanv1.Source{Repo: "https://git.example.com/other.git"}}})).To(Succeed())
 		Expect(k8sClient.Create(ctx, &koptanv1.SelfService{

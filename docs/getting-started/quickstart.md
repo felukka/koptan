@@ -16,7 +16,10 @@ kubectl -n demo create secret docker-registry demo-registry \
   --docker-server=ghcr.io \
   --docker-username=<github-user> \
   --docker-password=<token-with-write:packages>
+kubectl -n demo label secret demo-registry koptan.felukka.org/credentials=true
 ```
+
+Koptan only uses Secrets with this label (see [Security](../configuration/security.md#secrets-must-opt-in)).
 
 ## 2. Create the Service
 
@@ -48,6 +51,7 @@ kubectl apply -f service.yaml
     Create a token Secret and add it under `source`:
     ```bash
     kubectl -n demo create secret generic hello-git --from-literal=token=<token>
+    kubectl -n demo label secret hello-git koptan.felukka.org/credentials=true
     ```
     ```yaml
       source:

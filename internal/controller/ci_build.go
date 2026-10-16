@@ -28,19 +28,28 @@ const (
 // The clone and build scripts never interpolate user input: the repository,
 // revision and image arrive as environment variables and are only ever
 // quoted, so nothing in them can become a shell command or a git option.
+// The token is passed per command as an http.extraHeader and never written
+// to .git/config: plugin steps and the image build both see the workspace.
 const cloneScript = `set -eu
-url="$REPO"
+header=""
 if [ -n "${GIT_TOKEN:-}" ]; then
-  case "$url" in
-    https://*) url="https://x-access-token:${GIT_TOKEN}@${url#https://}" ;;
+  case "$REPO" in
+    https://*) header="Authorization: Basic $(printf 'x-access-token:%s' "$GIT_TOKEN" | base64 | tr -d '\n')" ;;
   esac
 fi
+fetch() {
+  if [ -n "$header" ]; then
+    git -c "http.extraHeader=$header" fetch -q "$@"
+  else
+    git fetch -q "$@"
+  fi
+}
 git init -q "$WORKSPACE"
 cd "$WORKSPACE"
-git remote add origin "$url"
-if ! git fetch -q --depth 1 origin "$SHA" 2>/dev/null; then
+git remote add origin "$REPO"
+if ! fetch --depth 1 origin "$SHA" 2>/dev/null; then
   # Servers that refuse to serve a bare SHA: fetch everything instead.
-  git fetch -q origin
+  fetch origin
 fi
 git -c advice.detachedHead=false checkout -q --detach "$SHA"
 `

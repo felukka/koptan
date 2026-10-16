@@ -56,6 +56,7 @@ After installing, Helm prints the next steps: checking the controller, creating 
 | `nameOverride` | `""` | Overrides the chart name in resource names. |
 | `fullnameOverride` | `""` | Overrides the full resource name. |
 | `defaultRegistry` | `docker.io` | Registry used when a Service sets no `spec.image.registry`. Sets `KOPTAN_DEFAULT_REGISTRY`. |
+| `allowUnlabeledSecrets` | `false` | Accept Secrets without the `koptan.felukka.org/credentials=true` label. Insecure, for migrating old installs only; see [Security](../configuration/security.md#secrets-must-opt-in). Sets `KOPTAN_ALLOW_UNLABELED_SECRETS`. |
 | `extraEnv` | `[]` | Extra environment variables for the manager container. |
 
 ### SelfService agent

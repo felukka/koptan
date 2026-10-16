@@ -56,11 +56,6 @@ func ValidateRevision(rev string) error {
 // IsSHA reports whether rev is a full 40-character commit SHA.
 func IsSHA(rev string) bool { return shaRe.MatchString(rev) }
 
-// IsHTTPURL reports whether a token can be sent as HTTP basic auth.
-func IsHTTPURL(repo string) bool {
-	return strings.HasPrefix(repo, "https://") || strings.HasPrefix(repo, "http://")
-}
-
 var relPathRe = regexp.MustCompile(`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
 
 // ValidateRelPath accepts an empty path or a relative path inside the

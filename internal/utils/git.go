@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -117,19 +118,31 @@ func HasRevisionChanged(ctx context.Context, repo, revision, knownSHA, token str
 	return rev.SHA != knownSHA, rev, nil
 }
 
+// TokenAuth is the HTTP basic auth that carries token to repo, or nil when
+// there is no token or the remote does not speak http(s) (ssh, git). A
+// token with a plain http:// remote is an error: it would cross the
+// network in clear text.
+func TokenAuth(repo, token string) (transport.AuthMethod, error) {
+	switch {
+	case token == "":
+		return nil, nil
+	case strings.HasPrefix(repo, "https://"):
+		return &http.BasicAuth{Username: "x-access-token", Password: token}, nil
+	case strings.HasPrefix(repo, "http://"):
+		return nil, fmt.Errorf("refusing to send credentials to %s over plain http; use https", repo)
+	}
+	return nil, nil
+}
+
 func listRemoteRefs(repo, token string) ([]*plumbing.Reference, error) {
 	remote := git.NewRemote(memory.NewStorage(), &config.RemoteConfig{
 		Name: "origin",
 		URLs: []string{repo},
 	})
 
-	var auth transport.AuthMethod
-	if token != "" && IsHTTPURL(repo) {
-		auth = &http.BasicAuth{
-			Username: "x-access-token",
-			Password: token,
-		}
+	auth, err := TokenAuth(repo, token)
+	if err != nil {
+		return nil, err
 	}
-
 	return remote.List(&git.ListOptions{Auth: auth, PeelingOption: git.AppendPeeled})
 }

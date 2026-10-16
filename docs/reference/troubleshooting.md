@@ -40,11 +40,13 @@ kubectl -n <ns> annotate ksvc <name> koptan.felukka.org/refresh="$(date +%s)" --
 | `branch "<x>" not found in <repo>` / `tag ... not found` / `revision ... not found` | The revision does not exist. | Check the spelling, or push the branch. |
 | `<repo> has no default branch (HEAD)` | Empty repository with no revision. | Push a first commit, or set `revision`. |
 | `repository URL "<url>" must use https` / `scheme ... is not allowed` / `needs a host and a path` | Invalid URL. | Use a normal clone URL. |
-| `read git token secret "<name>": ...` / `secret "<name>" has no key "<key>"` | The Secret in `source.secretRef` is missing or has another key. | Create it in the Service's namespace with the right key. |
+| `git token: read secret "<name>": ...` / `secret "<name>" has no key "<key>"` | The Secret in `source.secretRef` is missing or has another key. | Create it in the Service's namespace with the right key. |
+| `secret "<name>" is not labelled koptan.felukka.org/credentials=true` | Koptan only uses Secrets that opt in. | `kubectl label secret <name> koptan.felukka.org/credentials=true`, after checking the Secret is meant for Koptan. |
+| `refusing to send credentials to <repo> over plain http` | A `secretRef` with an `http://` repository. | Use the `https://` URL. |
 | `CIPlugin <name> not found in namespace <ns>` | `spec.plugins` names a plugin that does not exist. | Create the plugin, or remove it from the list. |
 | `CIPlugin <name> is invalid: ...` | The plugin is not `Accepted`. | `kubectl describe cip <name>` and fix it. |
 | `no FROM instruction in the Dockerfile` / `empty Dockerfile` / `the Dockerfile is larger than ...` | Your Dockerfile is not usable. | Fix the Dockerfile. |
-| `registry credentials secret "<name>": ...` / `secret "<name>" has no .dockerconfigjson key` | `image.credentialsSecret` is missing or not of type `kubernetes.io/dockerconfigjson`. | Create it with `kubectl create secret docker-registry`. |
+| `registry credentials: read secret "<name>": ...` / `secret "<name>" has no .dockerconfigjson key` | `image.credentialsSecret` is missing or not of type `kubernetes.io/dockerconfigjson`. | Create it with `kubectl create secret docker-registry`. |
 
 ## CI is `Failed`
 

@@ -13,6 +13,7 @@ spec:
   sonarqube:
     hostURL: "https://sonarqube.example.com"
     # kubectl create secret generic sonarqube-token --from-literal=token=...
+    # kubectl label secret sonarqube-token koptan.felukka.org/credentials=true
     tokenSecretRef:
       name: sonarqube-token
       key: token

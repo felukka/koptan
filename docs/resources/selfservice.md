@@ -34,6 +34,7 @@ sequenceDiagram
 ```bash
 kubectl create secret generic shop-git --from-literal=token=ghp_...
 kubectl create secret generic shop-ai --from-literal=apiKey=sk-ant-...
+kubectl label secret shop-git shop-ai koptan.felukka.org/credentials=true
 ```
 
 ```yaml

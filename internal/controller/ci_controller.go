@@ -32,6 +32,8 @@ const (
 type CIReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// Secrets decides which Secrets a build Pod may use.
+	Secrets SecretPolicy
 }
 
 // NewCIReconciler returns a CIReconciler.
@@ -164,6 +166,12 @@ func (r *CIReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		return ctrl.Result{}, err
 	}
 	pod := buildPod(&ci, svc, sha, image, dockerCfg, steps)
+	if err := r.Secrets.checkPod(ctx, r, pod); err != nil {
+		r.markCIFailed(&ci, "SecretNotAllowed", err.Error())
+		ci.Status.BuildingRevision = sha
+		ci.Status.ObservedGeneration = ci.Generation
+		return ctrl.Result{}, r.patchStatus(ctx, orig, &ci)
+	}
 	if err := controllerutil.SetControllerReference(&ci, pod, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -196,9 +204,9 @@ func validateBuild(ci *koptanv1.CI, svc *koptanv1.Service) error {
 // credentialsSecret, or one generated from the deprecated loginSecret.
 func (r *CIReconciler) registrySecret(ctx context.Context, ci *koptanv1.CI) (string, error) {
 	if name := ci.Spec.Registry.CredentialsSecret; name != "" {
-		var s corev1.Secret
-		if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: ci.Namespace}, &s); err != nil {
-			return "", fmt.Errorf("registry credentials secret %q: %w", name, err)
+		s, err := r.Secrets.get(ctx, r, ci.Namespace, name)
+		if err != nil {
+			return "", fmt.Errorf("registry credentials: %w", err)
 		}
 		if _, ok := s.Data[corev1.DockerConfigJsonKey]; !ok {
 			return "", fmt.Errorf("secret %q has no %s key (type kubernetes.io/dockerconfigjson expected)",
@@ -216,6 +224,7 @@ func (r *CIReconciler) registrySecret(ctx context.Context, ci *koptanv1.CI) (str
 	}
 	s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: ci.Name + "-registry", Namespace: ci.Namespace}}
 	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, s, func() error {
+		s.Labels = map[string]string{labelCredentials: "true"}
 		s.Type = corev1.SecretTypeDockerConfigJson
 		s.Data = map[string][]byte{corev1.DockerConfigJsonKey: cfg}
 		return controllerutil.SetControllerReference(ci, s, r.Scheme)

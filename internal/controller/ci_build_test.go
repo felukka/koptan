@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -88,6 +91,50 @@ func TestValidateSourceRejectsEscapingPaths(t *testing.T) {
 	svc.Spec.Build = &koptanv1.BuildSpec{DockerfilePath: "a/../../b"}
 	if err := validateSource(svc); err == nil {
 		t.Error("want an error for a Dockerfile path with ..")
+	}
+}
+
+// The token must never reach the workspace's .git/config: plugin steps and
+// a repo Dockerfile's "COPY . ." both see the workspace.
+func TestCloneScriptKeepsTokenOutOfGitConfig(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh")
+	}
+	dir := t.TempDir()
+	calls := filepath.Join(dir, "calls")
+	stub := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALLS\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(sh, "-c", cloneScript)
+	cmd.Env = []string{
+		"PATH=" + dir + ":" + os.Getenv("PATH"), "CALLS=" + calls,
+		"REPO=https://git.example.com/web.git", "SHA=0123456789abcdef0123456789abcdef01234567",
+		"WORKSPACE=" + filepath.Join(dir, "ws"), "GIT_TOKEN=s3cr3t",
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "ws"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("clone script: %v\n%s", err, out)
+	}
+	raw, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := string(raw)
+	if !strings.Contains(log, "remote add origin https://git.example.com/web.git\n") {
+		t.Errorf("remote must be the plain URL:\n%s", log)
+	}
+	// x-access-token:s3cr3t, base64-encoded, sent only as a per-command header.
+	if !strings.Contains(log, "-c http.extraHeader=Authorization: Basic eC1hY2Nlc3MtdG9rZW46czNjcjN0 fetch") {
+		t.Errorf("fetch must carry the token as a one-shot header:\n%s", log)
+	}
+	for _, line := range strings.Split(log, "\n") {
+		if strings.Contains(line, "s3cr3t") || (strings.HasPrefix(line, "config") && strings.Contains(line, "Authorization")) {
+			t.Errorf("token leaked into a persistent git command: %q", line)
+		}
 	}
 }
 

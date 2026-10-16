@@ -39,6 +39,7 @@ var _ = Describe("Service pipeline", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, svc)).To(Succeed())
+		createCredentialSecret("pipe-git")
 		ci := &koptanv1.CI{
 			ObjectMeta: metav1.ObjectMeta{Name: "pipe-ci", Namespace: ns, Labels: map[string]string{labelService: "pipe"}},
 			Spec: koptanv1.CISpec{

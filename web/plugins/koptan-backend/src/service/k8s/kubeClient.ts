@@ -24,6 +24,9 @@ import type {
   RawResource,
 } from './types';
 
+/** Marks a Secret the operator may use as credentials. */
+const CREDENTIALS_LABEL = 'koptan.felukka.org/credentials';
+
 export class KubeKoptanClient implements KoptanClient {
   private cached?: CustomObjectsApi;
   private loaded?: KubeConfig;
@@ -126,6 +129,10 @@ export class KubeKoptanClient implements KoptanClient {
     );
   }
 
+  /**
+   * Creates a Secret the operator may use: it only accepts Secrets labelled
+   * `koptan.felukka.org/credentials=true`.
+   */
   async createSecret(
     namespace: string,
     name: string,
@@ -134,7 +141,11 @@ export class KubeKoptanClient implements KoptanClient {
   ): Promise<void> {
     await this.core.createNamespacedSecret({
       namespace,
-      body: { metadata: { name, namespace }, type, stringData: data },
+      body: {
+        metadata: { name, namespace, labels: { [CREDENTIALS_LABEL]: 'true' } },
+        type,
+        stringData: data,
+      },
     });
   }
 
