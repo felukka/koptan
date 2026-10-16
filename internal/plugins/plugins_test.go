@@ -160,10 +160,54 @@ func TestCodeQL(t *testing.T) {
 	if got := codeQLLanguages([]string{"python", "java-kotlin"}, "go"); got != "python:python java-kotlin:java" {
 		t.Errorf("configured languages win: %q", got)
 	}
+	if sh, err := exec.LookPath("sh"); err == nil {
+		if out, err := exec.Command(sh, "-n", "-c", codeQLScript).CombinedOutput(); err != nil {
+			t.Errorf("codeQLScript does not parse: %v\n%s", err, out)
+		}
+	}
 	bad := plugin("codeql", 1, koptanv1.CIPluginSpec{Type: koptanv1.CIPluginCodeQL,
 		CodeQL: &koptanv1.CodeQLConfig{Languages: []string{"cobol; rm -rf /"}}})
 	if err := Validate(&bad); err == nil {
 		t.Error("unknown CodeQL languages must be rejected")
+	}
+}
+
+// The count runs the script's own jq filter against CodeQL-shaped SARIF,
+// where the severity lives on the rule, not the result.
+func TestCodeQLCountFilter(t *testing.T) {
+	jq, err := exec.LookPath("jq")
+	if err != nil {
+		t.Skip("no jq")
+	}
+	count := func(t *testing.T, min, sarifPath, sarif string) string {
+		t.Helper()
+		args := []string{"--arg", "min", min, codeQLCountFilter}
+		cmd := exec.Command(jq, args...)
+		if sarifPath != "" {
+			cmd.Args = append(cmd.Args, sarifPath)
+		} else {
+			cmd.Stdin = strings.NewReader(sarif)
+		}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("jq: %v\n%s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	// 3 error rules, 1 warning rule, and an error-rule result downgraded to note.
+	for min, want := range map[string]string{"error": "3", "warning": "4", "note": "5", "none": "0"} {
+		if got := count(t, min, "testdata/codeql-python.sarif", ""); got != want {
+			t.Errorf("failOnSeverity %s: got %s results, want %s", min, got, want)
+		}
+	}
+	// No index: the rule is found by id in the driver; an unknown rule counts as warning.
+	byID := `{"runs":[{"tool":{"driver":{"rules":[{"id":"x/a","defaultConfiguration":{"level":"error"}}]}},
+		"results":[{"ruleId":"x/a"},{"ruleId":"x/unknown"}]}]}`
+	if got := count(t, "error", "", byID); got != "1" {
+		t.Errorf("rule by id: got %s, want 1", got)
+	}
+	if got := count(t, "warning", "", byID); got != "2" {
+		t.Errorf("unknown rule as warning: got %s, want 2", got)
 	}
 }
 

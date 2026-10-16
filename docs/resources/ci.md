@@ -81,6 +81,8 @@ These fields are set by Koptan from the Service.
 | `plugins` | CIPlugins to run, each pinned to the plugin's `generation`, so editing a plugin triggers a rebuild. |
 | `extraSteps` | Extra containers. Reserved; not set by Koptan. |
 
+The Service also sets the label `koptan.felukka.org/language` to the detected stack (`go`, `python`, `node`, ...). Plugin steps get it as `$KOPTAN_LANGUAGE`, already on the first build.
+
 ## Deleting
 
 The CI is owned by its Service and is deleted with it. Deleting a CI by hand deletes its build Pods and its CD; Koptan creates a new CI on the Service's next check.

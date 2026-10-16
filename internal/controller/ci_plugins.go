@@ -28,12 +28,20 @@ func (r *CIReconciler) pluginSteps(ctx context.Context, ci *koptanv1.CI, svc *ko
 		}
 		list = append(list, p)
 	}
+	// The Service sets the language label in the same write as the
+	// revision, so the first build has it even before the Service status
+	// is patched. A label, not a spec field: changing it must not bump the
+	// generation and rebuild. CIs without the label fall back to the status.
+	lang := ci.Labels[labelLanguage]
+	if lang == "" {
+		lang = svc.Status.ServiceType
+	}
 	return plugins.Steps(list, plugins.BuildEnv{
 		Service:    svc.Name,
 		Namespace:  ci.Namespace,
 		Repo:       svc.Spec.Source.Repo,
 		Revision:   sha,
-		Language:   svc.Status.ServiceType,
+		Language:   lang,
 		ContextDir: ci.Spec.ContextDir,
 	})
 }

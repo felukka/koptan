@@ -152,4 +152,39 @@ var _ = Describe("CI plugins", func() {
 		Expect(err).To(MatchError(ContainSubstring("does-not-exist not found")))
 		Expect(k8sClient.Delete(ctx, svc, client.PropagationPolicy(metav1.DeletePropagationBackground))).To(Succeed())
 	})
+
+	// P-10: on a new Service's first build the Service status is not patched
+	// yet; the CI's own language label must reach the plugin steps.
+	It("gives plugins the language on the first build, before the Service status has it", func() {
+		Expect(k8sClient.Create(ctx, customPlugin("plg-first", 1, nil))).To(Succeed())
+		svc := &koptanv1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "plg-first-svc", Namespace: ns},
+			Spec: koptanv1.ServiceSpec{
+				Source:  koptanv1.Source{Repo: "https://git.example.com/team/first.git"},
+				Plugins: []koptanv1.PluginRef{{Name: "plg-first"}},
+			},
+		}
+		Expect(k8sClient.Create(ctx, svc)).To(Succeed())
+
+		sr := &ServiceReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		refs, err := sr.resolvePlugins(ctx, svc)
+		Expect(err).NotTo(HaveOccurred())
+		name, err := sr.ensureCI(ctx, svc, ciTarget{language: "python", sha: sha, dockerfileCM: "first-dockerfile", plugins: refs})
+		Expect(err).NotTo(HaveOccurred())
+		ci := &koptanv1.CI{}
+		ciKey := types.NamespacedName{Name: name, Namespace: ns}
+		Expect(k8sClient.Get(ctx, ciKey, ci)).To(Succeed())
+		Expect(ci.Labels[labelLanguage]).To(Equal("python"))
+		Expect(svc.Status.ServiceType).To(BeEmpty())
+
+		ciR := NewCIReconciler(k8sClient, k8sClient.Scheme())
+		for range 2 { // finalizer, then the build
+			_, err = ciR.Reconcile(ctx, reconcile.Request{NamespacedName: ciKey})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		Expect(k8sClient.Get(ctx, ciKey, ci)).To(Succeed())
+		var pod corev1.Pod
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ci.Status.BuildPod, Namespace: ns}, &pod)).To(Succeed())
+		Expect(pod.Spec.InitContainers[1].Env).To(ContainElement(corev1.EnvVar{Name: "KOPTAN_LANGUAGE", Value: "python"}))
+	})
 })
