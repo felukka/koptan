@@ -22,3 +22,11 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.5.0
+  release-scripts:
+    name: Release scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v6
+      - name: Test hack/release-version.sh
+        run: bash hack/release-version_test.sh

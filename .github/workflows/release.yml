@@ -1,124 +1,184 @@
 ---
 name: Release Pipeline
+# Releases one component (operator, agent or ui) or all three:
+# - Actions → Release Pipeline → Run workflow, with a component and a version;
+#   the pipeline creates the tags on the selected commit.
+# - Or push a tag: vX.Y.Z (operator), agent/vX.Y.Z or ui/vX.Y.Z.
+# hack/release-version.sh refuses versions that aren't higher than the
+# component's previous ones, and the release only runs for a commit on main
+# whose CI passed.
 on:
   push:
     tags:
       - v*.*.*
-  # Releases the selected branch's head as a new tag (Actions → Release Pipeline → Run workflow).
+      - agent/v*.*.*
+      - ui/v*.*.*
   workflow_dispatch:
     inputs:
-      tag:
-        description: Release tag to create from the selected branch, e.g. v1.2.3
+      component:
+        description: What to release
+        required: true
+        type: choice
+        options:
+          - all
+          - operator
+          - agent
+          - ui
+      version:
+        description: Version to release, e.g. 1.2.3 (for "all", every component gets it)
         required: true
         type: string
 permissions:
   contents: read
+# One release at a time, so two runs can't take the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
 jobs:
-  # The tag comes from the pushed ref or, on a manual run, from the input. A manual run may
-  # reuse an existing tag only when it points at the same commit (re-running a failed release).
   version:
     name: version
     runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
-      version: ${{ steps.tag.outputs.version }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Resolve tag
-        id: tag
-        env:
-          TAG: ${{ inputs.tag || github.ref_name }}
-        run: |-
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::tag \"$TAG\" is not of the form vX.Y.Z"
-            exit 1
-          fi
-          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
-            # An annotated tag lists its tag object and the commit (the "^{}" line); use the commit.
-            refs="$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}")"
-            existing="$(awk '$2 ~ /\^\{\}$/ {print $1}' <<<"$refs")"
-            existing="${existing:-$(cut -f1 <<<"$refs")}"
-            if [[ -n "$existing" && "$existing" != "$GITHUB_SHA" ]]; then
-              echo "::error::tag $TAG already exists at $existing, not at $GITHUB_SHA"
-              exit 1
-            fi
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-  images:
-    name: image (${{ matrix.name }})
-    needs: version
-    runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-    strategy:
-      matrix:
-        include:
-          - name: operator
-            context: .
-            image: ghcr.io/felukka/koptan
-          - name: agent
-            context: agent
-            image: ghcr.io/felukka/koptan-agent
+      actions: read
+      packages: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      components: ${{ steps.resolve.outputs.components }}
+      builds: ${{ steps.resolve.outputs.builds }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        with:
+          fetch-depth: 0
+      - name: Resolve components and version
+        id: resolve
+        env:
+          INPUT_COMPONENT: ${{ inputs.component }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |-
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            component="$INPUT_COMPONENT" version="${INPUT_VERSION#v}"
+          else
+            case "$GITHUB_REF_NAME" in
+              agent/v*) component=agent ;;
+              ui/v*) component=ui ;;
+              *) component=operator ;;
+            esac
+            version="${GITHUB_REF_NAME#*v}"
+          fi
+          if [[ "$component" == all ]]; then
+            components=(operator agent ui)
+          else
+            components=("$component")
+          fi
+          for c in "${components[@]}"; do
+            echo "::group::$c $version"
+            hack/release-version.sh "$c" "$version" "$GITHUB_SHA" | tee "/tmp/$c.out"
+            echo "::endgroup::"
+          done
+          # One build per component and architecture, each on a native runner.
+          builds="$(jq -nc '[$ARGS.positional[] as $c
+            | {amd64: "ubuntu-24.04", arm64: "ubuntu-24.04-arm"} | to_entries[]
+            | {component: $c, arch: .key, runner: .value}]' --args "${components[@]}")"
+          {
+            echo "version=$version"
+            echo "components=$(jq -nc '$ARGS.positional' --args "${components[@]}")"
+            echo "builds=$builds"
+          } >> "$GITHUB_OUTPUT"
       - name: Login Registry
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # v1.2.3 is published as 1.2.3, 1.2 and latest; 1.2.3 matches the chart appVersion.
-      - name: Image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ matrix.image }}
-          tags: |
-            type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.tag }}
-            type=raw,value=latest
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-  # The Backstage image packs a host build (packages/backend/dist), so it builds outside the matrix.
-  ui-image:
-    name: image (ui)
+      # A version must never overwrite a published image. A tag that already
+      # points at this commit (a pushed tag, or a re-run) was checked when it
+      # was created.
+      - name: Image tags are unused
+        env:
+          COMPONENTS: ${{ steps.resolve.outputs.components }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |-
+          set -euo pipefail
+          for c in $(jq -r '.[]' <<<"$COMPONENTS"); do
+            if grep -qx existing=true "/tmp/$c.out"; then
+              continue
+            fi
+            case "$c" in
+              operator) image=ghcr.io/felukka/koptan ;;
+              agent) image=ghcr.io/felukka/koptan-agent ;;
+              ui) image=ghcr.io/felukka/koptan-ui ;;
+            esac
+            if docker buildx imagetools inspect "$image:$VERSION" >/dev/null 2>&1; then
+              echo "::error::$image:$VERSION is already published"
+              exit 1
+            fi
+          done
+      - name: Commit is on main and its CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |-
+          set -euo pipefail
+          git fetch -q origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not on main"
+            exit 1
+          fi
+          # Workflows a path filter skipped have no run and count as passing.
+          blocked="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=100" \
+            --jq '.workflow_runs[] | select(.name != "Release Pipeline")
+              | select(.status != "completed" or (.conclusion | IN("success", "skipped", "neutral") | not))
+              | "\(.name): \(.status)/\(.conclusion // "-") \(.html_url)"')"
+          if [[ -n "$blocked" ]]; then
+            echo "::error::CI for $GITHUB_SHA is not green; re-run the release when it is:"
+            echo "$blocked"
+            exit 1
+          fi
+  image:
+    name: image (${{ matrix.component }}, ${{ matrix.arch }})
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.version.outputs.builds) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Component
+        id: c
+        env:
+          COMPONENT: ${{ matrix.component }}
+        run: |-
+          case "$COMPONENT" in
+            operator) echo "image=ghcr.io/felukka/koptan" >> "$GITHUB_OUTPUT"
+                      echo "context=." >> "$GITHUB_OUTPUT"
+                      echo "file=Dockerfile" >> "$GITHUB_OUTPUT" ;;
+            agent)    echo "image=ghcr.io/felukka/koptan-agent" >> "$GITHUB_OUTPUT"
+                      echo "context=agent" >> "$GITHUB_OUTPUT"
+                      echo "file=agent/Dockerfile" >> "$GITHUB_OUTPUT" ;;
+            ui)       echo "image=ghcr.io/felukka/koptan-ui" >> "$GITHUB_OUTPUT"
+                      echo "context=web" >> "$GITHUB_OUTPUT"
+                      echo "file=web/packages/backend/Dockerfile" >> "$GITHUB_OUTPUT" ;;
+          esac
+      # The Backstage image packs a host build (packages/backend/dist).
       - name: Setup Node
+        if: matrix.component == 'ui'
         uses: actions/setup-node@v4
         with:
           node-version: 24
       - name: Build backend bundle
+        if: matrix.component == 'ui'
         working-directory: web
         run: |-
           corepack enable
           yarn install --immutable
           yarn tsc
           yarn build:backend
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login Registry
@@ -127,47 +187,136 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Pushed by digest only; the merge job tags the multi-arch image.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.c.outputs.context }}
+          file: ${{ steps.c.outputs.file }}
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=${{ steps.c.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.component }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}-${{ matrix.arch }}
+      - name: Save digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |-
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.component }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          retention-days: 1
+  # Joins the per-architecture images into one tagged multi-arch image.
+  publish:
+    name: publish (${{ matrix.component }})
+    needs: [version, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: ${{ fromJSON(needs.version.outputs.components) }}
+    steps:
+      - name: Component
+        id: c
+        env:
+          COMPONENT: ${{ matrix.component }}
+        run: |-
+          case "$COMPONENT" in
+            operator) echo "image=ghcr.io/felukka/koptan" >> "$GITHUB_OUTPUT" ;;
+            agent) echo "image=ghcr.io/felukka/koptan-agent" >> "$GITHUB_OUTPUT" ;;
+            ui) echo "image=ghcr.io/felukka/koptan-ui" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-${{ matrix.component }}-*
+          merge-multiple: true
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # X.Y.Z is published as X.Y.Z, X.Y and latest; X.Y.Z matches the chart.
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/felukka/koptan-ui
+          images: ${{ steps.c.outputs.image }}
           tags: |
-            type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.tag }}
+            type=semver,pattern={{version}},value=v${{ needs.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.version.outputs.version }}
             type=raw,value=latest
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: web
-          file: web/packages/backend/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=ui
-          cache-to: type=gha,mode=max,scope=ui
+      - name: Create multi-arch image
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ steps.c.outputs.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |-
+          set -euo pipefail
+          args=()
+          while read -r t; do
+            if [[ -n "$t" ]]; then
+              args+=(-t "$t")
+            fi
+          done <<<"$TAGS"
+          digests=()
+          for d in *; do
+            digests+=("$IMAGE@sha256:$d")
+          done
+          docker buildx imagetools create "${args[@]}" "${digests[@]}"
+          docker buildx imagetools inspect "$IMAGE:${{ needs.version.outputs.version }}"
+  # One GitHub release per tag, with notes since the component's previous tag.
   release:
-    name: release
-    needs: [version, images, ui-image]
+    name: release (${{ matrix.component }})
+    needs: [version, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    strategy:
+      matrix:
+        component: ${{ fromJSON(needs.version.outputs.components) }}
     steps:
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
-          tag_name: ${{ needs.version.outputs.tag }}
-          # Creates the tag on a manual run; on a tag push it is that tag's commit.
-          target_commitish: ${{ github.sha }}
-          generate_release_notes: true
-  # Opens a "[koptan] ..." and a "[koptan-ui] ..." PR in felukka/charts (the charts CI allows
-  # one chart per PR) with the new CRDs, RBAC and appVersion.
-  # Uses a GitHub App installed on felukka/charts (contents and pull-requests write),
-  # from the CHARTS_APP_ID and CHARTS_APP_PRIVATE_KEY secrets.
+          fetch-depth: 0
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPONENT: ${{ matrix.component }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |-
+          set -euo pipefail
+          out="$(hack/release-version.sh "$COMPONENT" "$VERSION" "$GITHUB_SHA")"
+          tag="$(sed -n 's/^tag=//p' <<<"$out")"
+          previous="$(sed -n 's/^previous=//p' <<<"$out")"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists"
+            exit 0
+          fi
+          args=(--target "$GITHUB_SHA" --generate-notes --title "$tag")
+          if [[ -n "$previous" ]]; then
+            args+=(--notes-start-tag "$previous")
+          fi
+          gh release create "$tag" "${args[@]}"
+  # Opens one PR in felukka/charts for every chart the release changes (new
+  # CRDs and RBAC, appVersion, the agent image pin) and lets it merge itself
+  # once the charts CI passes. Uses a GitHub App installed on felukka/charts
+  # (contents and pull-requests write), from the CHARTS_APP_ID and
+  # CHARTS_APP_PRIVATE_KEY secrets.
   chart-sync:
     name: chart sync
-    needs: [version, images, ui-image]
+    needs: [version, publish]
     runs-on: ubuntu-latest
     steps:
       - name: Charts token
@@ -186,40 +335,59 @@ jobs:
           repository: felukka/charts
           token: ${{ steps.app-token.outputs.token }}
           path: charts
-      - name: Sync koptan chart
-        run: hack/sync-chart.sh charts/charts/koptan "${{ needs.version.outputs.version }}"
-      - name: Open koptan pull request
+      - name: Sync charts
+        id: sync
+        env:
+          COMPONENTS: ${{ needs.version.outputs.components }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |-
+          set -euo pipefail
+          has() { jq -e --arg c "$1" 'index($c) != null' <<<"$COMPONENTS" >/dev/null; }
+          koptan=() ui=()
+          if has operator; then koptan+=(--app-version "$VERSION"); fi
+          if has agent; then koptan+=(--agent-version "$VERSION"); fi
+          if has ui; then ui+=(--app-version "$VERSION"); fi
+          hack/sync-chart.sh charts/charts/koptan "${koptan[@]}"
+          hack/sync-chart.sh charts/charts/koptan-ui "${ui[@]}"
+          title="" changed=""
+          for chart in koptan koptan-ui; do
+            if [[ -n "$(git -C charts status --porcelain -- "charts/$chart")" ]]; then
+              title="${title}[$chart]"
+              changed="$changed $chart"
+            fi
+          done
+          {
+            echo "title=$title sync with koptan $VERSION ($(jq -r 'join(", ")' <<<"$COMPONENTS"))"
+            echo "branch=release/sync-$(jq -r 'join("-")' <<<"$COMPONENTS")-$VERSION"
+            echo "changed=${changed# }"
+          } >> "$GITHUB_OUTPUT"
+      - name: Open pull request
+        id: pr
+        if: steps.sync.outputs.changed != ''
         uses: peter-evans/create-pull-request@v7
         with:
           path: charts
-          add-paths: charts/koptan
+          add-paths: |
+            charts/koptan
+            charts/koptan-ui
           token: ${{ steps.app-token.outputs.token }}
-          branch: koptan/sync-${{ needs.version.outputs.version }}
-          commit-message: '[koptan] sync with koptan ${{ needs.version.outputs.version }}'
-          title: '[koptan] sync with koptan ${{ needs.version.outputs.version }}'
+          branch: ${{ steps.sync.outputs.branch }}
+          commit-message: ${{ steps.sync.outputs.title }}
+          title: ${{ steps.sync.outputs.title }}
           body: |-
-            Syncs `charts/koptan` with koptan [${{ needs.version.outputs.tag }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.version.outputs.tag }}):
+            Syncs felukka/charts with koptan ${{ needs.version.outputs.version }} (${{ needs.version.outputs.components }}), [release run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
 
-            - CRDs from `config/crd/bases`
-            - ClusterRole rules from `config/rbac/role.yaml` and `config/rbac/backstage_role.yaml`
-            - `appVersion` set to `${{ needs.version.outputs.version }}`, chart `version` bumped
+            Charts changed: ${{ steps.sync.outputs.changed }}. Depending on the components released:
+            - `koptan`: CRDs from `config/crd/bases`, ClusterRole rules from `config/rbac`, `appVersion` (operator) and the `agent.image` pin (agent)
+            - `koptan-ui`: ClusterRole rules from `config/rbac/backstage_role.yaml`, `appVersion` (ui)
+            - chart `version` bumped for every changed chart
 
-            Review any new manager flags or env vars in `cmd/main.go` by hand; they are not synced.
-      - name: Sync koptan-ui chart
-        run: hack/sync-chart.sh charts/charts/koptan-ui "${{ needs.version.outputs.version }}"
-      - name: Open koptan-ui pull request
-        uses: peter-evans/create-pull-request@v7
-        with:
-          path: charts
-          add-paths: charts/koptan-ui
-          token: ${{ steps.app-token.outputs.token }}
-          branch: koptan-ui/sync-${{ needs.version.outputs.version }}
-          commit-message: '[koptan-ui] sync with koptan ${{ needs.version.outputs.version }}'
-          title: '[koptan-ui] sync with koptan ${{ needs.version.outputs.version }}'
-          body: |-
-            Syncs `charts/koptan-ui` with koptan [${{ needs.version.outputs.tag }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.version.outputs.tag }}):
-
-            - ClusterRole rules from `config/rbac/backstage_role.yaml`
-            - `appVersion` set to `${{ needs.version.outputs.version }}` (image `ghcr.io/felukka/koptan-ui`), chart `version` bumped
-
-            Review new `web/app-config.yaml` settings by hand; they are not synced.
+            Merges itself once the chart checks pass. New manager flags, env vars or app-config settings are not synced; add them by hand.
+      # The app may bypass the review rule but not the required checks, so
+      # GitHub merges the PR once they pass.
+      - name: Merge when green
+        if: steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.pr.outputs.pull-request-number }}
+        run: gh pr merge "$PR" --repo felukka/charts --auto --squash --delete-branch

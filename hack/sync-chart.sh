@@ -1,17 +1,29 @@
 #!/usr/bin/env bash
 # Syncs a Helm chart in felukka/charts with this repo and, when anything
-# changed, sets appVersion and bumps the chart version:
+# changed, bumps the chart's patch version:
 #   charts/koptan     CRDs and the ClusterRole rules from config/rbac
 #   charts/koptan-ui  the ClusterRole rules from config/rbac/backstage_role.yaml
+# --app-version sets appVersion (the operator version for koptan, the UI
+# version for koptan-ui); --agent-version pins agent.image in koptan.
 #
-#   hack/sync-chart.sh <chart-dir> <version>
+#   hack/sync-chart.sh <chart-dir> [--app-version X.Y.Z] [--agent-version X.Y.Z]
 #
 # Needs yq v4. Run from the repository root; <chart-dir> must be in a git checkout.
 set -euo pipefail
 
-chart="${1:?usage: sync-chart.sh <chart-dir> <version>}"
-version="${2:?usage: sync-chart.sh <chart-dir> <version>}"
-version="${version#v}"
+usage="usage: sync-chart.sh <chart-dir> [--app-version X.Y.Z] [--agent-version X.Y.Z]"
+chart="${1:?$usage}"
+shift
+app_version="" agent_version=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --app-version) app_version="${2:?$usage}"; shift 2 ;;
+    --agent-version) agent_version="${2:?$usage}"; shift 2 ;;
+    *) echo "$usage" >&2; exit 1 ;;
+  esac
+done
+app_version="${app_version#v}"
+agent_version="${agent_version#v}"
 
 # replace_rules <template> <role.yaml> swaps the rules: block of a chart
 # template (everything indented after "rules:") for the rules in role.yaml.
@@ -45,21 +57,33 @@ case "$name" in
     ;;
 esac
 
-current="$(yq '.version' "$chart/Chart.yaml")"
-app="$(yq '.appVersion' "$chart/Chart.yaml")"
+if [ -n "$app_version" ]; then
+  VERSION="$app_version" yq -i '.appVersion = strenv(VERSION)' "$chart/Chart.yaml"
+fi
+if [ -n "$agent_version" ]; then
+  if [ "$name" != koptan ]; then
+    echo "--agent-version only applies to the koptan chart" >&2
+    exit 1
+  fi
+  # sed, not yq: yq -i would reformat values.yaml and its comments.
+  sed -i -E "s#^(  image: ghcr\.io/felukka/koptan-agent:).*#\1$agent_version#" "$chart/values.yaml"
+  grep -qx "  image: ghcr.io/felukka/koptan-agent:$agent_version" "$chart/values.yaml" || {
+    echo "agent.image not found in $chart/values.yaml" >&2
+    exit 1
+  }
+fi
 
-if [ -z "$(git -C "$chart" status --porcelain -- .)" ] && [ "$app" = "$version" ]; then
-  echo "$name chart is up to date with koptan $version"
+if [ -z "$(git -C "$chart" status --porcelain -- .)" ]; then
+  echo "$name chart is up to date"
   exit 0
 fi
 
-# Bump the chart patch version, or jump to the app version when it is higher.
+current="$(yq '.version' "$chart/Chart.yaml")"
 IFS=. read -r major minor patch <<<"${current%%-*}"
 next="$major.$minor.$((patch + 1))"
-if [ "$(printf '%s\n%s\n' "$next" "$version" | sort -V | tail -n1)" = "$version" ]; then
-  next="$version"
+# Jump to the app version when it is higher, as before.
+if [ -n "$app_version" ] && [ "$(printf '%s\n%s\n' "$next" "$app_version" | sort -V | tail -n1)" = "$app_version" ]; then
+  next="$app_version"
 fi
-
-VERSION="$version" NEXT="$next" yq -i '.appVersion = strenv(VERSION) | .version = strenv(NEXT)' \
-  "$chart/Chart.yaml"
-echo "$name chart $current -> $next (appVersion $version)"
+NEXT="$next" yq -i '.version = strenv(NEXT)' "$chart/Chart.yaml"
+echo "$name chart $current -> $next"

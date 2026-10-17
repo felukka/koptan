@@ -63,7 +63,7 @@ After installing, Helm prints the next steps: checking the controller, creating 
 
 | Value | Default | Description |
 |---|---|---|
-| `agent.image` | `ghcr.io/felukka/koptan-agent:latest` | Image of the SelfService agent pods. Sets `KOPTAN_AGENT_IMAGE`. Pin a version in production. |
+| `agent.image` | `ghcr.io/felukka/koptan-agent:<latest agent release>` | Image of the SelfService agent pods. Sets `KOPTAN_AGENT_IMAGE`. Each chart version pins the agent released with it. |
 | `agent.keySecret.name` | `koptan-agent-key` | Secret holding the agent key. Optional: without it SelfServices are disabled, everything else works. |
 | `agent.keySecret.key` | `key` | Key inside that Secret. |
 
