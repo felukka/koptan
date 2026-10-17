@@ -1,5 +1,5 @@
 ---
-site_name: Koptan's Documentation
+site_name: Koptan Docs
 repo_url: https://github.com/felukka/koptan
 site_url: https://koptan.felukka.org
 nav:
@@ -33,7 +33,7 @@ theme:
   logo: assets/koptan.png
   favicon: assets/koptan.png
   font:
-    text: IBM Plex Sans Condensed
+    text: Manrope
     code: JetBrains Mono
   features:
     - navigation.footer
@@ -43,16 +43,20 @@ theme:
     - navigation.expand
     - content.tabs.link
   palette:
-    - scheme: default
-      primary: custom
-      toggle:
-        icon: material/weather-sunny
-        name: Dark mode
     - scheme: slate
       primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Light mode
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Dark mode
+extra_css:
+  - stylesheets/felukka.css
 markdown_extensions:
   - attr_list
   - pymdownx.emoji:
